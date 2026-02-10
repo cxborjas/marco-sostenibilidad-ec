@@ -1,0 +1,43 @@
+﻿window_start_year: 2000
+window_end_year: 2024
+censor_date: "2024-12-31"
+
+# Versionado del marco
+methodology_version: "v1.0"
+repo_tag: "unknown"
+repo_commit: "unknown"
+
+topN_cantones: 10
+topN_actividades: 10
+
+comparativas:
+  min_n: 200
+  min_events: 30
+  max_no_informado_share: 0.4
+  canton_topN: 5
+  max_groups_sector: 8
+  max_groups_canton: 6
+  max_groups_flags: 3
+  max_groups_scale: 4
+
+critical_bins_months:
+  - [0, 6]
+  - [7, 12]
+  - [13, 24]
+  - [25, 60]
+  - [61, 120]
+
+cohorts_5y:
+  - [2000, 2004]
+  - [2005, 2009]
+  - [2010, 2014]
+  - [2015, 2019]
+  - [2020, 2024]
+
+# Lista de codigos a omitir del analisis (por ejemplo, codigos CIIU).
+# Dejar en [] si no aplica.
+exclude_codes: [S949901, S949200, S94200, S942000, E360001, P852101]
+
+# Columna objetivo para aplicar exclude_codes. Si no existe, se intenta resolver
+# automaticamente entre columnas comunes (CIIU y RUC).
+exclude_codes_column: "CODIGO_CIIU"

@@ -1,0 +1,52 @@
+﻿# Nota: data/raw se mantiene vacia en el repo. Ajusta raw_path a tu ruta local.
+provincias:
+  AZUAY:
+    raw_path: "data/raw/SRI_RUC_Azuay.csv"
+  BOLIVAR:
+    raw_path: "data/raw/SRI_RUC_Bolivar.csv"
+  CAÑAR:
+    raw_path: "data/raw/SRI_RUC_Cañar.csv"
+  CARCHI:
+    raw_path: "data/raw/SRI_RUC_Carchi.csv"
+  CHIMBORAZO:
+    raw_path: "data/raw/SRI_RUC_Chimborazo.csv"
+  COTOPAXI:
+    raw_path: "data/raw/SRI_RUC_Cotopaxi.csv"
+  EL ORO:
+    raw_path: "data/raw/SRI_RUC_El_Oro.csv"
+  ESMERALDAS:
+    raw_path: "data/raw/SRI_RUC_Esmeraldas.csv"
+  GALAPAGOS:
+    raw_path: "data/raw/SRI_RUC_Galapagos.csv"
+  GUAYAS:
+    raw_path: "data/raw/SRI_RUC_Guayas.csv"
+  IMBABURA:
+    raw_path: "data/raw/SRI_RUC_Imbabura.csv"
+  LOJA:
+    raw_path: "data/raw/SRI_RUC_Loja.csv"
+  LOS RIOS:
+    raw_path: "data/raw/SRI_RUC_Los_Rios.csv"
+  MANABI:
+    raw_path: "data/raw/SRI_RUC_Manabi.csv"
+  MORONA SANTIAGO:
+    raw_path: "data/raw/SRI_RUC_Morona_Santiago.csv"
+  NAPO:
+    raw_path: "data/raw/SRI_RUC_Napo.csv"
+  ORELLANA:
+    raw_path: "data/raw/SRI_RUC_Orellana.csv"
+  PASTAZA:
+    raw_path: "data/raw/SRI_RUC_Pastaza.csv"
+  PICHINCHA:
+    raw_path: "data/raw/SRI_RUC_Pichincha.csv"
+  SANTA ELENA:
+    raw_path: "data/raw/SRI_RUC_Santa_Elena.csv"
+  SANTO DOMINGO DE LOS TSACHILAS:
+    raw_path: "data/raw/SRI_RUC_Santo_Domingo.csv"
+  SUCUMBIOS:
+    raw_path: "data/raw/SRI_RUC_Sucumbios.csv"
+  TUNGURAHUA:
+    raw_path: "data/raw/SRI_RUC_Tungurahua.csv"
+  ZAMORA CHINCHIPE:
+    raw_path: "data/raw/SRI_RUC_Zamora_Chinchipe.csv"
+  PROVINCIA:
+    raw_path: "data/demo/SRI_RUC_Provincia.csv"
