@@ -4,7 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows semantic versioning vMAJOR.MINOR.
 
-## v1.0 - 2026-02-08
+## v1.1 - 2026-02-10
+### Executive summary
+- Se retira el notebook `run_experiments.ipynb` y se consolida la ejecución en `01_run_provincia.ipynb`.
+
+### Documentation
+- README actualizado para reflejar el cuaderno único de ejecución.
+
+### Fixes
+- N/A
+
+## v1.0 - 2026-02-10
 ### Executive summary
 - Baseline reproducible pipeline for ETL, QC, metrics, figures, and reports.
 

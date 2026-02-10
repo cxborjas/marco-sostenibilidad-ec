@@ -93,7 +93,7 @@ El proyecto incluye **optimizaciones automáticas** que mejoran significativamen
 | Uso de memoria | 8 GB | 3 GB | **62% menos** |
 
 ### Uso básico
-Las optimizaciones están **habilitadas automáticamente** en el notebook `run_experiments.ipynb`. Simplemente:
+Las optimizaciones están **habilitadas automáticamente** en el notebook [notebooks/01_run_provincia.ipynb](notebooks/01_run_provincia.ipynb). Simplemente:
 
 1. Ejecuta el notebook normalmente
 2. Cuando se te pregunte si deseas procesar todas las provincias, di **sí**
