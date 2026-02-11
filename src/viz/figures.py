@@ -556,10 +556,9 @@ def save_hist_duracion_cierres(ruc: pd.DataFrame, outpath: str, title: str, max_
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.set_title(title, fontweight='bold', color='#2d3748', pad=10)
-    ax.text(0.5, 1.01, f"Solo cierres observados (n={n:,}), bins={bin_width} meses, ventana 0\u2013{max_x}",
-            transform=ax.transAxes, fontsize=8, ha="center", va="bottom", color='#868e96')
 
-    # Nota al pie
+    # Nota al pie (subtítulo + estadísticos)
+    sub = f"Solo cierres observados (n={n:,}), bins={bin_width} meses, ventana 0\u2013{max_x}."
     note = (
         f"L\u00edneas verticales: P25={int(round(p25_v))}m, Mediana={int(round(median_v))}m, "
         f"Media={int(round(mean_v))}m, P75={int(round(p75_v))}m. "
@@ -567,7 +566,7 @@ def save_hist_duracion_cierres(ruc: pd.DataFrame, outpath: str, title: str, max_
     )
     if n < 50:
         note += " Interpretar con prudencia por bajo n."
-    fig.text(0.01, 0.005, note, fontsize=6.5, ha="left", color='#718096')
+    fig.text(0.01, 0.005, f"{sub}  {note}", fontsize=6.5, ha="left", color='#718096')
 
     fig.tight_layout(rect=[0, 0.04, 1, 0.97])
     fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white')
