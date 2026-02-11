@@ -1279,12 +1279,13 @@ def run_provincia(
         str(_figure_path(out_base, "actividades_top10.png")),
         f"Top actividades (CIIU) — {prov_output}",
     )
+    window_max_months = (w1 - w0 + 1) * 12
     save_hist_duracion_cierres(
         ruc,
         str(_figure_path(out_base, "hist_duracion_cierres.png")),
         f"Duración en cierres observados — {prov_output}",
+        max_months=window_max_months,
     )
-    window_max_months = (w1 - w0 + 1) * 12
     save_km_plot(
         km,
         str(_figure_path(out_base, "km_general.png")),

@@ -452,13 +452,15 @@ def save_bar_cohortes(coh: pd.DataFrame, outpath: str, title: str) -> None:
     fig.savefig(outpath, dpi=200)
     plt.close(fig)
 
-def save_hist_duracion_cierres(ruc: pd.DataFrame, outpath: str, title: str):
+def save_hist_duracion_cierres(ruc: pd.DataFrame, outpath: str, title: str, max_months: int | None = None):
     fig, ax = plt.subplots(figsize=(9, 4.8))
     df = ruc[(ruc["event"] == 1)].dropna(subset=["duration_months"]).copy()
     if df.empty:
         ax.text(0.5, 0.5, "Sin cierres observados", ha="center", va="center")
     else:
         x = df["duration_months"].astype("int64")
+        if max_months is not None:
+            x = x[x <= max_months]
         n = int(len(x))
         if n >= 200:
             bin_width = 6
@@ -466,11 +468,12 @@ def save_hist_duracion_cierres(ruc: pd.DataFrame, outpath: str, title: str):
             bin_width = 12
         else:
             bin_width = 24
-        max_x = int(x.max()) if n else 0
+        max_x = max_months if max_months is not None else (int(x.max()) if n else 0)
         bins = list(range(0, max_x + bin_width, bin_width)) or [0, bin_width]
         ax.hist(x, bins=bins, color="#1f77b4", alpha=0.85)
         for ref in [12, 24, 60, 120]:
-            ax.axvline(ref, linestyle="--", color="#555555", linewidth=1)
+            if ref <= max_x:
+                ax.axvline(ref, linestyle="--", color="#555555", linewidth=1)
         ax.set_xlabel("Duración (meses) — sociedades cerradas")
         ax.set_ylabel("Frecuencia")
         note_parts = [
@@ -478,12 +481,14 @@ def save_hist_duracion_cierres(ruc: pd.DataFrame, outpath: str, title: str):
             f"Bin ancho: {bin_width} meses.",
             "Solo eventos (event=1).",
         ]
+        if max_months is not None:
+            note_parts.append(f"Eje X limitado a {max_months} meses (ventana de análisis).")
         if n < 50:
             note_parts.append("Interpretar con prudencia por bajo n.")
-        fig.text(0.01, 0.01, " ".join(note_parts), fontsize=7, ha="left")
-    ax.set_title(title)
+        fig.text(0.01, 0.01, " ".join(note_parts), fontsize=7, ha="left", color='#718096')
+    ax.set_title(title, fontweight='bold', color='#2d3748')
     fig.tight_layout(rect=[0, 0.05, 1, 1])
-    fig.savefig(outpath, dpi=200)
+    fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white')
     plt.close(fig)
 
 def save_km_plot(
