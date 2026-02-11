@@ -515,10 +515,9 @@ def save_hist_duracion_cierres(ruc: pd.DataFrame, outpath: str, title: str, max_
             ax.axvline(ref, linestyle=":", color="#adb5bd", linewidth=1, alpha=0.7)
             ax.text(ref, ymax * 0.02, yr_label, fontsize=7, ha="center", va="bottom", color="#868e96")
 
-    # Etiquetas en barras (solo las que superen umbral)
-    threshold = max(ymax * 0.05, 1)
+    # Etiquetas en todas las barras
     for count_val, left_edge, right_edge in zip(counts_hist, bin_edges[:-1], bin_edges[1:]):
-        if count_val >= threshold:
+        if count_val > 0:
             pct = count_val / n * 100
             mid = (left_edge + right_edge) / 2
             ax.text(mid, count_val, f"{int(count_val)}\n({pct:.0f}%)",
@@ -551,6 +550,7 @@ def save_hist_duracion_cierres(ruc: pd.DataFrame, outpath: str, title: str, max_
 
     # Ejes y título
     ax.set_xlim(0, max_x)
+    ax.set_xticks(range(0, max_x + 1, 25))
     ax.set_xlabel("Duración (meses) \u2014 sociedades cerradas", fontweight='600')
     ax.set_ylabel("Frecuencia", fontweight='600')
     ax.spines['top'].set_visible(False)
