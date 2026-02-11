@@ -491,23 +491,30 @@ def save_km_plot(
     outpath: str,
     title: str,
     counts: dict[str, int] | None = None,
+    max_months: int | None = None,
 ):
     fig, ax = plt.subplots(figsize=(10, 6))
     fig.patch.set_facecolor('white')
     if km.empty:
         ax.text(0.5, 0.5, "KM no disponible (sin eventos)", ha="center", va="center")
     else:
-        ax.step(km["t"], km["s"], where="post", linewidth=2.5, color=COLOR_PALETTE[0])
-        ax.fill_between(km["t"], 0, km["s"], step="post", alpha=0.2, color=COLOR_PALETTE[0])
+        plot_km = km.copy()
+        if max_months is not None:
+            plot_km = plot_km[plot_km["t"] <= max_months]
+        ax.step(plot_km["t"], plot_km["s"], where="post", linewidth=2.5, color=COLOR_PALETTE[0])
+        ax.fill_between(plot_km["t"], 0, plot_km["s"], step="post", alpha=0.2, color=COLOR_PALETTE[0])
         ax.set_ylim(0, 1.02)
         ax.set_xlabel("Meses desde inicio", fontweight='600')
         ax.set_ylabel("Supervivencia (Kaplan–Meier)", fontweight='600')
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        limit = _km_xlim([float(km["t"].max())]) if not km["t"].empty else None
-        if limit:
-            ax.set_xlim(0, limit)
-        last = km.dropna(subset=["t", "s"]).tail(1)
+        if max_months is not None:
+            ax.set_xlim(0, max_months * 1.05)
+        else:
+            limit = _km_xlim([float(plot_km["t"].max())]) if not plot_km["t"].empty else None
+            if limit:
+                ax.set_xlim(0, limit)
+        last = plot_km.dropna(subset=["t", "s"]).tail(1)
         if not last.empty:
             x = float(last["t"].iloc[0])
             y = float(last["s"].iloc[0])
@@ -519,10 +526,13 @@ def save_km_plot(
         n_total = counts.get("n_total")
         events_n = counts.get("events_n")
         censored_n = counts.get("censored_n")
+        note = f"RUC incluidos: {_fmt_int(n_total)} · Eventos: {_fmt_int(events_n)} · Censurados: {_fmt_int(censored_n)}"
+        if max_months is not None:
+            note += f" · Eje X limitado a {max_months} meses (ventana de análisis)."
         fig.text(
             0.01,
             0.01,
-            f"RUC incluidos: {_fmt_int(n_total)} · Eventos: {_fmt_int(events_n)} · Censurados: {_fmt_int(censored_n)}",
+            note,
             fontsize=8,
             ha="left",
             color='#718096'
