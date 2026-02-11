@@ -1507,11 +1507,22 @@ def run_provincia(
     if not tab_scale.empty:
         write_csv(tab_scale, _table_path(out_base, "comparativa_escala.csv"))
         comparativa_tables += 1
-        scale_counts = {
-            str(row["group"]): int(row["group_n"])
-            for _, row in tab_scale.iterrows()
-            if pd.notna(row.get("group_n"))
-        }
+        scale_stats: dict[str, dict[str, int]] = {}
+        no_info_share = None
+        for _, row in tab_scale.iterrows():
+            grp = str(row.get("group"))
+            n = row.get("group_n")
+            ev = row.get("group_events_n")
+            if pd.notna(n) and pd.notna(ev):
+                n_i = int(n)
+                ev_i = int(ev)
+                scale_stats[grp] = {"n": n_i, "events": ev_i, "censored": max(n_i - ev_i, 0)}
+            if no_info_share is None and pd.notna(row.get("no_informado_share")):
+                no_info_share = float(row.get("no_informado_share"))
+
+        for grp in SCALE_BUCKET_ORDER:
+            scale_stats.setdefault(grp, {"n": 0, "events": 0, "censored": 0})
+
         included_groups = (
             tab_scale.loc[tab_scale["km_included"] == True, "group"]
             .astype("string")
@@ -1525,14 +1536,28 @@ def run_provincia(
                     f"Log-rank χ²={lr['chi2']:.2f} (df={lr['df']}), "
                     f"p={_fmt_pvalue(lr.get('p_value'))}"
                 )
+        window_note = f"Eje X limitado a {int(window_max_months)} meses (ventana común)."
+        min_note = f"Criterio: min_n={cmp_min_n}, min_events={cmp_min_events}."
+        no_info_note = None
+        if isinstance(no_info_share, (int, float)) and math.isfinite(no_info_share):
+            no_info_note = f"No informado: {_fmt_pct(no_info_share)}."
+        extra_parts = [window_note, logrank_note, min_note, no_info_note]
+        extra_note = " ".join([p for p in extra_parts if p])
+        legend_only = [g for g in SCALE_BUCKET_ORDER if g not in km_scale]
         save_km_multi(
             km_scale,
             str(_figure_path(out_base, "km_escala.png")),
-            f"KM por escala — {prov_output}",
+            f"Supervivencia por escala — {prov_output}",
             max_months=window_max_months,
-            fill=False,
-            group_counts=scale_counts,
-            extra_note=logrank_note,
+            fill=True,
+            fill_alpha=0.08,
+            group_stats=scale_stats,
+            label_map={g: g for g in SCALE_BUCKET_ORDER},
+            show_last_point=False,
+            line_styles=["solid", "dashed", "dashdot", "dotted"],
+            legend_only=legend_only,
+            legend_only_suffix="sin curva",
+            extra_note=extra_note,
         )
         comparativa_figures += 1
     save_km_flags(km_flags_map, str(out_base / "figures" / "km_flags.png"), f"KM por banderas — {prov_output}")

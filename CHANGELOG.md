@@ -8,6 +8,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 ### Executive summary
 - F10 (KM por obligación): sombreado suave bajo la curva; leyenda con n/eventos/censurados y grupo sin curva; log-rank con significancia.
 - F10: eje X limitado a la ventana común y marcadores comparables en hitos (S(60/120/300)); estilos de línea diferenciados y sombreado suave.
+- F09 (Supervivencia por escala): sombreado suave, título más claro, grupos ausentes con n=0 en leyenda y notas clave al pie.
 
 ### Visualizations/Report
 - `save_km_multi` admite hitos comparables, estilos de línea, sombreado ajustable y etiquetas ampliadas.
