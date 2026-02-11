@@ -1337,16 +1337,21 @@ def run_provincia(
         comparativa_figures += 1
 
     tab_canton, km_canton = kpis_by_group(ruc_cmp, "canton_bucket", critical_bins_months=critical_bins,
-                                          min_n=cmp_min_n, min_events=cmp_min_events,
-                                          max_groups=cmp_max_groups_canton,
+                                          min_n=max(cmp_min_n // 4, 30),
+                                          min_events=max(cmp_min_events // 3, 5),
+                                          max_groups=max(cmp_max_groups_canton, 10),
                                           max_no_informado_share=cmp_max_no_info)
     if not tab_canton.empty:
         write_csv(tab_canton, _table_path(out_base, "comparativa_canton_top5.csv"))
         comparativa_tables += 1
+        _canton_sizes = dict(zip(tab_canton["group"], tab_canton["group_n"].astype(int)))
         save_km_multi(
             km_canton,
             str(_figure_path(out_base, "km_canton_topN.png")),
-            f"KM por cantón (top5+resto) — {prov_output}",
+            f"KM por cantón — {prov_output}",
+            max_months=window_max_months,
+            top_n=5,
+            group_sizes=_canton_sizes,
         )
         comparativa_figures += 1
 
