@@ -8,11 +8,13 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 ### Executive summary
 - Mejora visual en la selección de provincias del notebook `01_run_provincia.ipynb`.
 - La carpeta `outputs/*/data/` ahora siempre se genera (raw_filtrado.csv, ruc_master.parquet), pero se excluye de git.
+- F01: picos de creación y cierre integrados en la caja de leyenda en lugar de anotaciones flotantes.
 
 ### Fixes
 - Lista de provincias reorganizada en 3 columnas para mostrarla completa sin truncamiento.
 - Eliminada la guarda `public_mode` que impedía la escritura de `data/`; los archivos se generan siempre localmente.
 - Agregada regla `outputs/*/data/` en `.gitignore` para excluir datos sensibles del repositorio.
+- `save_line_demografia`: picos de nacimientos y cierres movidos a la caja de leyenda (Creación/Cierre).
 
 ## v1.1 - 2026-02-10
 ### Executive summary

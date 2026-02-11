@@ -209,30 +209,9 @@ def save_line_demografia(
         ax.set_xticks(years)
         ax.set_xticklabels(years, rotation=45, ha="right")
 
+        # Calcular picos para incluirlos en la caja de leyenda
         births_peak = demo.loc[demo["births_n"].idxmax()] if demo["births_n"].max() > 0 else None
-        if births_peak is not None:
-            ax.annotate(
-                f"Pico nacimientos ({int(births_peak['year'])})",
-                (births_peak["year"], births_peak["births_n"]),
-                xytext=(0, 12),
-                textcoords="offset points",
-                ha="center",
-                fontsize=8,
-                fontweight='600',
-                color=COLOR_PALETTE[0]
-            )
         closures_peak = demo.loc[demo["closures_terminal_n"].idxmax()] if demo["closures_terminal_n"].max() > 0 else None
-        if closures_peak is not None:
-            ax.annotate(
-                f"Pico cierres ({int(closures_peak['year'])})",
-                (closures_peak["year"], closures_peak["closures_terminal_n"]),
-                xytext=(0, -14),
-                textcoords="offset points",
-                ha="center",
-                fontsize=8,
-                fontweight='600',
-                color=COLOR_PALETTE[1]
-            )
 
     ax.set_xlim(window_start, window_end)
     ax.set_xlabel("Año", fontweight='600')
@@ -240,7 +219,24 @@ def save_line_demografia(
     ax.set_title(title, fontweight='bold', color='#2d3748')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.legend(loc='best', frameon=True, shadow=True)
+
+    # Leyenda con picos integrados
+    leg = ax.legend(loc='best', frameon=True, shadow=True)
+    peak_lines = []
+    if not demo.empty:
+        if births_peak is not None:
+            peak_lines.append(f"Pico creación: {int(births_peak['year'])} ({_fmt_int(births_peak['births_n'])})")
+        if closures_peak is not None:
+            peak_lines.append(f"Pico cierre: {int(closures_peak['year'])} ({_fmt_int(closures_peak['closures_terminal_n'])})")
+    if peak_lines:
+        bbox = leg.get_frame()
+        ax.annotate(
+            "\n".join(peak_lines),
+            xy=(0, 0), xycoords=bbox,
+            xytext=(4, -4), textcoords="offset points",
+            fontsize=7.5, fontweight='600', color='#4a5568',
+            va="top", ha="left",
+        )
     note_parts = [
         "Cierres=terminales observados; censura 31/12/2024.",
         "Conteos absolutos (RUC).",
