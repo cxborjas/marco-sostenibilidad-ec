@@ -382,26 +382,28 @@ def save_bar_actividades(act: pd.DataFrame, outpath: str, title: str):
         # Nombre de actividad dentro de la barra (sin código, ya está en el eje Y)
         act_label = _trim_text(actividad, max_len=50)
         bar_w = bar.get_width()
-        if bar_w > xmax * 0.25:
-            ax.text(bar_w * 0.02, i, f" {act_label}", va="center", ha="left",
-                    fontsize=7, fontweight='600', color="white")
-        else:
-            ax.text(bar_w + xmax * 0.005, i, f" {act_label}", va="center", ha="left",
-                    fontsize=7, fontweight='600', color="#4a5568")
 
-        # Valor numérico al final de la barra
+        # Valor numérico justo después de la barra
         num_label = _fmt_int(value)
         if _is_finite_number(share):
             num_label = f"{num_label} ({_fmt_percent(share)})"
-        ax.text(bar_w, i, f"  {num_label} ", va="center", ha="left" if bar_w < xmax * 0.85 else "right",
-                fontsize=7.5, fontweight='600',
-                color="#2d3748" if bar_w < xmax * 0.85 else "white")
+
+        if bar_w > xmax * 0.25:
+            # Barra grande: actividad dentro, número fuera
+            ax.text(bar_w * 0.02, i, f" {act_label}", va="center", ha="left",
+                    fontsize=7, fontweight='600', color="white")
+            ax.text(bar_w + xmax * 0.01, i, num_label, va="center", ha="left",
+                    fontsize=7.5, fontweight='600', color="#2d3748")
+        else:
+            # Barra pequeña: número primero, luego actividad separada
+            ax.text(bar_w + xmax * 0.01, i, f"{num_label}  ·  {act_label}",
+                    va="center", ha="left", fontsize=7, fontweight='600', color="#4a5568")
 
     ax.set_yticks(y_pos)
     ax.set_yticklabels(data["ciiu"].astype("string"), fontsize=8)
     ax.set_xlabel("RUC (sociedades)", fontweight='600')
     ax.set_ylabel("Código CIIU", fontweight='600')
-    ax.set_xlim(0, xmax * 1.25)
+    ax.set_xlim(0, xmax * 1.45)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
