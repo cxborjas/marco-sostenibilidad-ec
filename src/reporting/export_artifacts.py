@@ -24,8 +24,8 @@ from src.metrics.demografia import demografia_anual, cohortes, cohort_5y_label
 from src.metrics.geografia import cantones_topN_from_raw, concentracion_topk, cantones_share_from_raw
 from src.metrics.sectorial import macro_sectores, top_actividades, diversificacion_simple
 
-from src.metrics.supervivencia import survival_kpis, kpis_by_group
-from src.metrics.comparativas import add_scale_bucket, add_canton_topN_bucket
+from src.metrics.supervivencia import survival_kpis, kpis_by_group, logrank_test_multi
+from src.metrics.comparativas import add_scale_bucket, add_canton_topN_bucket, SCALE_BUCKET_ORDER
 
 from src.viz.figures import (
     save_line_demografia,
@@ -84,6 +84,17 @@ def _format_seconds(seconds: float | None) -> str:
     if minutes:
         return f"{minutes}m {secs}s"
     return f"{secs}s"
+
+def _fmt_pvalue(value) -> str:
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return "N/A"
+    if not math.isfinite(v) or v < 0:
+        return "N/A"
+    if v < 0.001:
+        return "<0.001"
+    return f"{v:.3f}"
 
 
 class _ProgressPrinter:
@@ -1371,14 +1382,37 @@ def run_provincia(
     tab_scale, km_scale = kpis_by_group(ruc_cmp, "scale_bucket", critical_bins_months=critical_bins,
                                         min_n=cmp_min_n, min_events=cmp_min_events,
                                         max_groups=cmp_max_groups_scale,
-                                        max_no_informado_share=cmp_max_no_info)
+                                        max_no_informado_share=cmp_max_no_info,
+                                        group_order=SCALE_BUCKET_ORDER)
     if not tab_scale.empty:
         write_csv(tab_scale, _table_path(out_base, "comparativa_escala.csv"))
         comparativa_tables += 1
+        scale_counts = {
+            str(row["group"]): int(row["group_n"])
+            for _, row in tab_scale.iterrows()
+            if pd.notna(row.get("group_n"))
+        }
+        included_groups = (
+            tab_scale.loc[tab_scale["km_included"] == True, "group"]
+            .astype("string")
+            .tolist()
+        )
+        logrank_note = None
+        if len(included_groups) >= 2:
+            lr = logrank_test_multi(ruc_cmp, "scale_bucket", groups=included_groups)
+            if math.isfinite(lr.get("chi2", float("nan"))):
+                logrank_note = (
+                    f"Log-rank χ²={lr['chi2']:.2f} (df={lr['df']}), "
+                    f"p={_fmt_pvalue(lr.get('p_value'))}"
+                )
         save_km_multi(
             km_scale,
             str(_figure_path(out_base, "km_escala.png")),
             f"KM por escala — {prov_output}",
+            max_months=window_max_months,
+            fill=False,
+            group_counts=scale_counts,
+            extra_note=logrank_note,
         )
         comparativa_figures += 1
     save_km_flags(km_flags_map, str(out_base / "figures" / "km_flags.png"), f"KM por banderas — {prov_output}")

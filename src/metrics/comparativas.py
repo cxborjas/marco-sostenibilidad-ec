@@ -1,14 +1,16 @@
 from __future__ import annotations
 import pandas as pd
 
+SCALE_BUCKET_ORDER = ["Micro", "Pequeña", "Mediana", "Grande"]
+
 def scale_bucket(est_count: int) -> str:
     if est_count <= 1:
-        return "1"
+        return "Micro"
     if 2 <= est_count <= 3:
-        return "2-3"
+        return "Pequeña"
     if 4 <= est_count <= 9:
-        return "4-9"
-    return "10+"
+        return "Mediana"
+    return "Grande"
 
 def add_scale_bucket(ruc: pd.DataFrame) -> pd.DataFrame:
     df = ruc.copy()

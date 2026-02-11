@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows semantic versioning vMAJOR.MINOR.
 
+## v1.3 - 2026-02-11
+### Executive summary
+- F09 (KM por escala): eje X limitado a la ventana de análisis; sin relleno para comparación clara.
+- F09: leyenda incluye n por grupo y nota con prueba log-rank global.
+- Escala renombrada a Micro/Pequeña/Mediana/Grande y orden estable en tabla y figura.
+
+### Visualizations/Report
+- `save_km_multi`: nuevos parámetros para controlar fill, n por grupo y nota extra.
+
+### Methodology
+- Log-rank global agregado para comparativos por escala (si hay ≥2 grupos incluidos).
+
+### Fixes
+- Orden consistente de grupos por escala en comparativas.
+
 ## v1.2 - 2026-02-11
 ### Executive summary
 - Mejora visual en la selección de provincias del notebook `01_run_provincia.ipynb`.
