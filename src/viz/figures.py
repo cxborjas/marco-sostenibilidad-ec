@@ -79,6 +79,29 @@ def _fmt_percent(value) -> str:
         return f"{v:,.1f}%"
     return f"{v * 100:,.1f}%"
 
+def _fmt_num_share(num, share) -> str:
+    if num is None:
+        return "N/A"
+    base = _fmt_int(num)
+    if share is None:
+        return base
+    try:
+        s = float(share)
+    except (TypeError, ValueError):
+        return base
+    if not math.isfinite(s):
+        return base
+    return f"{base} ({_fmt_percent(s)})"
+
+def _fmt_rate(value) -> str:
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return "N/A"
+    if not math.isfinite(v):
+        return "N/A"
+    return f"{v * 100:,.2f}%"
+
 
 def _fmt_months(value) -> str:
     try:
@@ -965,8 +988,6 @@ def save_executive_kpi_card(kpis: dict[str, object], outpath: str, title: str):
         ("RUC únicos", _fmt_int(kpis.get("unique_ruc_in_province"))),
         ("Estab/RUC mediana", _fmt_float(kpis.get("establishments_per_ruc_median"))),
         ("Estab/RUC p95", _fmt_float(kpis.get("establishments_per_ruc_p95"))),
-        ("Faltantes críticos (promedio)", _fmt_percent(kpis.get("missing_critical_avg_share"))),
-        ("Faltantes críticos (máx)", _fmt_percent(kpis.get("missing_critical_max_share"))),
         (
             "RUC multi-provincia",
             _fmt_share_num(
@@ -975,15 +996,25 @@ def save_executive_kpi_card(kpis: dict[str, object], outpath: str, title: str):
                 kpis.get("multi_province_share"),
             ),
         ),
+        ("% registros con faltantes críticos", _fmt_percent(kpis.get("missing_critical_any_share"))),
+        ("Top 3 faltantes (cols)", kpis.get("missing_critical_top3_cols") or "N/A"),
+        ("Faltantes críticos (promedio)", _fmt_percent(kpis.get("missing_critical_avg_share"))),
+        ("Faltantes críticos (máx)", _fmt_percent(kpis.get("missing_critical_max_share"))),
     ]
 
     demo_rows = [
-        ("Nacimientos 2000-2024", _fmt_int(kpis.get("births_total_2000_2024"))),
-        ("Cierres 2000-2024", _fmt_int(kpis.get("closures_terminal_total_2000_2024"))),
-        ("Neto 2000-2024", _fmt_int(kpis.get("net_total_2000_2024"))),
+        ("Nacimientos 2000-2024", _fmt_num_share(kpis.get("births_total_2000_2024"), kpis.get("births_share_universe"))),
+        ("Cierres 2000-2024", _fmt_num_share(kpis.get("closures_terminal_total_2000_2024"), kpis.get("closures_share_universe"))),
+        ("Neto 2000-2024", _fmt_num_share(kpis.get("net_total_2000_2024"), kpis.get("net_share_universe"))),
+        ("Tasa nacimientos anual prom.", _fmt_rate(kpis.get("birth_rate_avg"))),
+        ("Tasa cierres anual prom.", _fmt_rate(kpis.get("closure_rate_avg"))),
+        ("Tasa neta anual prom.", _fmt_rate(kpis.get("net_rate_avg"))),
         ("Nacimientos últimos 5 años", _fmt_int(kpis.get("births_last5"))),
         ("Cierres últimos 5 años", _fmt_int(kpis.get("closures_last5"))),
         ("Neto últimos 5 años", _fmt_int(kpis.get("net_last5"))),
+        ("Tasa nacimientos anual prom. (ult. 5a)", _fmt_rate(kpis.get("birth_rate_last5"))),
+        ("Tasa cierres anual prom. (ult. 5a)", _fmt_rate(kpis.get("closure_rate_last5"))),
+        ("Tasa neta anual prom. (ult. 5a)", _fmt_rate(kpis.get("net_rate_last5"))),
     ]
 
     struct_rows = [
@@ -991,10 +1022,12 @@ def save_executive_kpi_card(kpis: dict[str, object], outpath: str, title: str):
         ("Top5 cantonal (RUC)", _fmt_percent(kpis.get("top5_concentration_by_ruc_share"))),
         ("Top3 cantonal (estab)", _fmt_percent(kpis.get("top3_concentration_by_establishments_share"))),
         ("Top5 cantonal (estab)", _fmt_percent(kpis.get("top5_concentration_by_establishments_share"))),
+        ("Top 3 cantones (RUC)", kpis.get("top3_cantons") or "N/A"),
         (
             "Cantón líder",
             f"{kpis.get('leading_canton', 'N/A')} ({_fmt_percent(kpis.get('leading_canton_share'))})",
         ),
+        ("Top 3 macro-sectores", kpis.get("top3_macro_sectors") or "N/A"),
         (
             "Macro-sector líder",
             f"{kpis.get('leading_macro_sector', 'N/A')} ({_fmt_percent(kpis.get('leading_macro_sector_share'))})",
@@ -1006,11 +1039,13 @@ def save_executive_kpi_card(kpis: dict[str, object], outpath: str, title: str):
         ("RUC incluidos", _fmt_int(kpis.get("unique_ruc_in_province"))),
         ("Eventos (cierres)", _fmt_int(kpis.get("events_n"))),
         ("Censurados", _fmt_int(kpis.get("censored_n"))),
-        ("S(1) 12m", _fmt_percent(kpis.get("S_12m"))),
-        ("S(2) 24m", _fmt_percent(kpis.get("S_24m"))),
-        ("S(5) 60m", _fmt_percent(kpis.get("S_60m"))),
-        ("S(10) 120m", _fmt_percent(kpis.get("S_120m"))),
+        ("S(12m)", _fmt_percent(kpis.get("S_12m"))),
+        ("S(24m)", _fmt_percent(kpis.get("S_24m"))),
+        ("S(60m)", _fmt_percent(kpis.get("S_60m"))),
+        ("S(120m)", _fmt_percent(kpis.get("S_120m"))),
+        ("S(300m)", _fmt_percent(kpis.get("S_300m"))),
         ("Mediana supervivencia", _fmt_months(kpis.get("median_survival_months"))),
+        ("Cierre temprano (<12m)", _fmt_percent(kpis.get("early_closure_share_lt_12m"))),
         ("Cierre temprano (<24m)", _fmt_percent(kpis.get("early_closure_share_lt_24m"))),
         ("Periodo crítico", kpis.get("critical_period_bin") or "No alcanzado"),
     ]
@@ -1029,7 +1064,8 @@ def save_executive_kpi_card(kpis: dict[str, object], outpath: str, title: str):
         *surv_rows,
     ]
 
-    fig, ax = plt.subplots(figsize=(12, 10))
+    fig_height = max(12, 0.32 * len(rows))
+    fig, ax = plt.subplots(figsize=(12, fig_height))
     fig.patch.set_facecolor('white')
     ax.axis("off")
     table = ax.table(cellText=rows, colLabels=["Indicador", "Valor"], loc="center", cellLoc='left')
@@ -1078,15 +1114,16 @@ def save_executive_kpi_card(kpis: dict[str, object], outpath: str, title: str):
     window_start = kpis.get("window_start_year")
     window_end = kpis.get("window_end_year")
     censor_date = kpis.get("censor_date")
-    fig.text(
-        0.01,
-        0.01,
-        f"Periodo {window_start}-{window_end} · Censura {censor_date} · Asociativo, no causal.",
-        fontsize=8,
-        ha="left",
-        color='#718096'
-    )
-    fig.tight_layout(rect=[0, 0.04, 1, 0.96])
+    defs = [
+        f"Periodo {window_start}-{window_end} · Censura {censor_date} (administrativa al final del periodo). Asociativo, no causal.",
+        "Definiciones:",
+        "- Filas raw: registros de establecimientos en el raw filtrado (no anualizado).",
+        "- Faltantes criticos: CODIGO_CIIU, FECHA_INICIO_ACTIVIDADES, FECHA_SUSPENSION_DEFINITIVA, OBLIGADO, AGENTE_RETENCION, ESPECIAL.",
+        "- RUC multi-provincia: RUC con establecimientos en >=2 provincias.",
+        "- Nacimientos = primera fecha de inicio; cierres = suspension definitiva/terminal; periodo critico = intervalo con mayor densidad de cierres (bins configurados).",
+    ]
+    fig.text(0.01, 0.01, "\n".join(defs), fontsize=7, ha="left", color='#718096')
+    fig.tight_layout(rect=[0, 0.12, 1, 0.96])
     fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white')
     plt.close(fig)
 

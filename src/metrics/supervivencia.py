@@ -210,13 +210,20 @@ def survival_kpis(ruc: pd.DataFrame, critical_bins_months: list[list[int]] | Non
         "S_24m": survival_at(km, 24),
         "S_60m": survival_at(km, 60),
         "S_120m": survival_at(km, 120),
+        "S_300m": survival_at(km, 300),
         "median_survival_months": median_survival_months(km),
     }
 
     ev = df[df["event"] == 1].copy()
     cens = df[df["event"] == 0].copy()
+    cens_ge_12 = cens[cens["duration_months"] >= 12]
     cens_ge_24 = cens[cens["duration_months"] >= 24]
+    denom_12 = len(ev) + len(cens_ge_12)
     denom = len(ev) + len(cens_ge_24)
+    if denom_12:
+        k["early_closure_share_lt_12m"] = float((ev["duration_months"] < 12).sum()) / denom_12
+    else:
+        k["early_closure_share_lt_12m"] = float("nan")
     if denom:
         k["early_closure_share_lt_24m"] = float((ev["duration_months"] < 24).sum()) / denom
     else:

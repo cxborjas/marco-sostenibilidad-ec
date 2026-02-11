@@ -108,6 +108,40 @@ def _fmt_pct(value) -> str:
         return f"{v:.1f}%"
     return f"{v * 100:.1f}%"
 
+def _safe_div(num: float | int | None, denom: float | int | None) -> float:
+    try:
+        n = float(num)
+        d = float(denom)
+    except (TypeError, ValueError):
+        return float("nan")
+    if not math.isfinite(n) or not math.isfinite(d) or d == 0:
+        return float("nan")
+    return n / d
+
+def _rate_from_demo(demo: pd.DataFrame, num_col: str) -> float:
+    if demo.empty or num_col not in demo.columns or "stock_prev_n" not in demo.columns:
+        return float("nan")
+    denom = float(demo["stock_prev_n"].sum())
+    num = float(demo[num_col].sum())
+    return _safe_div(num, denom)
+
+def _topk_labels(df: pd.DataFrame, name_col: str, share_col: str, k: int = 3) -> str:
+    if df.empty or name_col not in df.columns or share_col not in df.columns:
+        return "N/A"
+    parts = []
+    for _, row in df.head(k).iterrows():
+        name = str(row.get(name_col, "")).strip()
+        share = row.get(share_col)
+        if not name:
+            continue
+        parts.append(f"{name} {_fmt_pct(share)}")
+    return ", ".join(parts) if parts else "N/A"
+
+def _missing_mask(series: pd.Series) -> pd.Series:
+    s = series.astype("string").fillna("").str.strip()
+    s_upper = s.str.upper()
+    return (s == "") | s_upper.isin(["NO INFORMADO", "N/A", "NA"])
+
 
 class _ProgressPrinter:
     def __init__(self, stages: list[str]):
@@ -765,8 +799,11 @@ def _executive_kpis(
     qc2: dict,
     demo_sum: dict,
     demo_recent: dict,
+    demo_rates: dict,
     geo: dict,
+    top3_cantons: str,
     sector: dict,
+    top3_macro: str,
     surv: dict,
     est_per_ruc: dict,
     multi_prov: dict,
@@ -798,9 +835,18 @@ def _executive_kpis(
         "births_total_2000_2024": demo_sum.get("births_total_2000_2024"),
         "closures_terminal_total_2000_2024": demo_sum.get("closures_terminal_total_2000_2024"),
         "net_total_2000_2024": demo_sum.get("net_total_2000_2024"),
+        "births_share_universe": demo_rates.get("births_share_universe"),
+        "closures_share_universe": demo_rates.get("closures_share_universe"),
+        "net_share_universe": demo_rates.get("net_share_universe"),
+        "birth_rate_avg": demo_rates.get("birth_rate_avg"),
+        "closure_rate_avg": demo_rates.get("closure_rate_avg"),
+        "net_rate_avg": demo_rates.get("net_rate_avg"),
         "births_last5": demo_recent.get("births_last5"),
         "closures_last5": demo_recent.get("closures_last5"),
         "net_last5": demo_recent.get("net_last5"),
+        "birth_rate_last5": demo_rates.get("birth_rate_last5"),
+        "closure_rate_last5": demo_rates.get("closure_rate_last5"),
+        "net_rate_last5": demo_rates.get("net_rate_last5"),
         "top3_concentration_by_ruc_share": geo.get("top3_concentration_by_ruc_share"),
         "top5_concentration_by_ruc_share": geo.get("top5_concentration_by_ruc_share"),
         "top3_concentration_by_establishments_share": geo.get("top3_concentration_by_establishments_share"),
@@ -808,18 +854,24 @@ def _executive_kpis(
         "leading_canton": geo.get("leading_canton", {}).get("name"),
         "leading_canton_share": geo.get("leading_canton", {}).get("ruc_share"),
         "leading_canton_est_share": geo.get("leading_canton", {}).get("establishments_share"),
+        "top3_cantons": top3_cantons,
         "leading_macro_sector": sector.get("leading_macro_sector"),
         "leading_macro_sector_share": sector.get("leading_macro_sector_share"),
         "macro_no_informado_share": no_informado.get("MACRO_SECTOR_CIIU"),
         "top1_macro_sector_share": sector.get("top1_macro_sector_share"),
         "hhi_macro_sector": sector.get("hhi_macro_sector"),
+        "top3_macro_sectors": top3_macro,
         "S_12m": surv.get("S_12m"),
         "S_24m": surv.get("S_24m"),
         "S_60m": surv.get("S_60m"),
         "S_120m": surv.get("S_120m"),
+        "S_300m": surv.get("S_300m"),
         "median_survival_months": surv.get("median_survival_months"),
+        "early_closure_share_lt_12m": surv.get("early_closure_share_lt_12m"),
         "early_closure_share_lt_24m": surv.get("early_closure_share_lt_24m"),
         "critical_period_bin": critical_period.get("bin_with_max_closures"),
+        "missing_critical_any_share": missing_critical.get("any_share"),
+        "missing_critical_top3_cols": missing_critical.get("top3_cols"),
     }
 
 
@@ -1477,6 +1529,136 @@ def run_provincia(
                     legend_only_suffix = "sin curva"
                     fill_alpha = 0.08
 
+                elif flag == "agente_retencion_3cat":
+                    title = f"Supervivencia por Agente de Retención (Sí vs No) — {prov_output}"
+                    fill = True
+                    fill_alpha = 0.08
+                    max_months_flag = min(window_max_months, 300)
+                    line_styles = ["solid", "dashed"]
+
+                    group_stats = {}
+                    no_info_share = None
+                    for _, row in tab_flag.iterrows():
+                        grp = str(row.get("group"))
+                        n = row.get("group_n")
+                        ev = row.get("group_events_n")
+                        if pd.notna(n) and pd.notna(ev):
+                            n_i = int(n)
+                            ev_i = int(ev)
+                            group_stats[grp] = {"n": n_i, "events": ev_i, "censored": max(n_i - ev_i, 0)}
+                        if no_info_share is None and pd.notna(row.get("no_informado_share")):
+                            no_info_share = float(row.get("no_informado_share"))
+
+                    def _map_ret_label(value: str) -> str:
+                        v = str(value).strip().upper()
+                        if v in {"SI", "SÍ"}:
+                            return "Sí"
+                        if v == "NO":
+                            return "No"
+                        if v in {"NO INFORMADO", "N/I", "NA"}:
+                            return "No informado"
+                        return str(value)
+
+                    mapped = {_map_ret_label(g) for g in group_stats.keys()}
+                    if "Sí" not in mapped:
+                        group_stats["Sí"] = {"n": 0, "events": 0, "censored": 0}
+                    if "No" not in mapped:
+                        group_stats["No"] = {"n": 0, "events": 0, "censored": 0}
+
+                    label_keys = set(km_flag.keys()) | set(group_stats.keys())
+                    label_map = {g: _map_ret_label(g) for g in label_keys}
+
+                    included_groups = list(km_flag.keys())
+                    logrank_note = None
+                    if len(included_groups) >= 2:
+                        lr = logrank_test_multi(ruc_cmp, flag, groups=included_groups)
+                        if math.isfinite(lr.get("chi2", float("nan"))):
+                            p_val = lr.get("p_value")
+                            sig = None
+                            if isinstance(p_val, (int, float)) and math.isfinite(p_val):
+                                sig = "significativo" if p_val < 0.05 else "no significativo"
+                            sig_txt = f" ({sig})" if sig else ""
+                            logrank_note = (
+                                f"Log-rank χ²={lr['chi2']:.2f} (df={lr['df']}), "
+                                f"p={_fmt_pvalue(p_val)}{sig_txt}"
+                            )
+
+                    window_note = f"Eje X limitado a {int(max_months_flag)} meses (ventana del estudio)."
+                    min_note = f"Criterio: min_n={cmp_min_n}, min_events={cmp_min_events}."
+                    no_info_note = None
+                    if isinstance(no_info_share, (int, float)) and math.isfinite(no_info_share):
+                        no_info_note = f"No informado: {_fmt_pct(no_info_share)}."
+                    extra_parts = [window_note, logrank_note, min_note, no_info_note]
+                    extra_note = " ".join([p for p in extra_parts if p])
+
+                    legend_only = [g for g in group_stats.keys() if g not in km_flag]
+                    legend_only_suffix = "sin curva"
+
+                elif flag == "especial_3cat":
+                    title = f"Supervivencia por Contribuyente Especial (Sí vs No) — {prov_output}"
+                    fill = True
+                    fill_alpha = 0.08
+                    max_months_flag = min(window_max_months, 300)
+                    line_styles = ["solid", "dashed"]
+
+                    group_stats = {}
+                    no_info_share = None
+                    for _, row in tab_flag.iterrows():
+                        grp = str(row.get("group"))
+                        n = row.get("group_n")
+                        ev = row.get("group_events_n")
+                        if pd.notna(n) and pd.notna(ev):
+                            n_i = int(n)
+                            ev_i = int(ev)
+                            group_stats[grp] = {"n": n_i, "events": ev_i, "censored": max(n_i - ev_i, 0)}
+                        if no_info_share is None and pd.notna(row.get("no_informado_share")):
+                            no_info_share = float(row.get("no_informado_share"))
+
+                    def _map_especial_label(value: str) -> str:
+                        v = str(value).strip().upper()
+                        if v in {"SI", "SÍ"}:
+                            return "Sí"
+                        if v == "NO":
+                            return "No"
+                        if v in {"NO INFORMADO", "N/I", "NA"}:
+                            return "No informado"
+                        return str(value)
+
+                    mapped = {_map_especial_label(g) for g in group_stats.keys()}
+                    if "Sí" not in mapped:
+                        group_stats["Sí"] = {"n": 0, "events": 0, "censored": 0}
+                    if "No" not in mapped:
+                        group_stats["No"] = {"n": 0, "events": 0, "censored": 0}
+
+                    label_keys = set(km_flag.keys()) | set(group_stats.keys())
+                    label_map = {g: _map_especial_label(g) for g in label_keys}
+
+                    included_groups = list(km_flag.keys())
+                    logrank_note = None
+                    if len(included_groups) >= 2:
+                        lr = logrank_test_multi(ruc_cmp, flag, groups=included_groups)
+                        if math.isfinite(lr.get("chi2", float("nan"))):
+                            p_val = lr.get("p_value")
+                            sig = None
+                            if isinstance(p_val, (int, float)) and math.isfinite(p_val):
+                                sig = "significativo" if p_val < 0.05 else "no significativo"
+                            sig_txt = f" ({sig})" if sig else ""
+                            logrank_note = (
+                                f"Log-rank χ²={lr['chi2']:.2f} (df={lr['df']}), "
+                                f"p={_fmt_pvalue(p_val)}{sig_txt}"
+                            )
+
+                    window_note = f"Eje X limitado a {int(max_months_flag)} meses (ventana del estudio)."
+                    min_note = f"Criterio: min_n={cmp_min_n}, min_events={cmp_min_events}."
+                    no_info_note = None
+                    if isinstance(no_info_share, (int, float)) and math.isfinite(no_info_share):
+                        no_info_note = f"No informado: {_fmt_pct(no_info_share)}."
+                    extra_parts = [window_note, logrank_note, min_note, no_info_note]
+                    extra_note = " ".join([p for p in extra_parts if p])
+
+                    legend_only = [g for g in group_stats.keys() if g not in km_flag]
+                    legend_only_suffix = "sin curva"
+
                 save_km_multi(
                     km_flag,
                     str(_figure_path(out_base, f"km_{flag}.png")),
@@ -1606,6 +1788,20 @@ def run_provincia(
         "avg": float(sum(crit_finite) / len(crit_finite)) if crit_finite else float("nan"),
         "max": float(max(crit_finite)) if crit_finite else float("nan"),
     }
+    critical_present = [col for col in critical_cols if col in df.columns]
+    if critical_present:
+        miss_any = None
+        for col in critical_present:
+            mask = _missing_mask(df[col])
+            miss_any = mask if miss_any is None else (miss_any | mask)
+        missing_critical["any_share"] = float(miss_any.mean()) if miss_any is not None else float("nan")
+    else:
+        missing_critical["any_share"] = float("nan")
+
+    top_missing = sorted(missingness_by_column.items(), key=lambda item: item[1], reverse=True)[:3]
+    missing_critical["top3_cols"] = ", ".join(
+        f"{col} {_fmt_pct(val)}" for col, val in top_missing
+    ) if top_missing else "N/A"
 
     invalid_dates = {
         "FECHA_INICIO_ACTIVIDADES_n": _invalid_date_count(raw, "FECHA_INICIO_ACTIVIDADES"),
@@ -1631,6 +1827,23 @@ def run_provincia(
         "closures_last5": int(demo_recent["closures_terminal_n"].sum()) if not demo_recent.empty else 0,
         "net_last5": int(demo_recent["net_n"].sum()) if not demo_recent.empty else 0,
     }
+
+    universe_n = int(qc1.get("unique_ruc") or 0)
+    demo_rates = {
+        "birth_rate_avg": _rate_from_demo(demo, "births_n"),
+        "closure_rate_avg": _rate_from_demo(demo, "closures_terminal_n"),
+        "net_rate_avg": _rate_from_demo(demo, "net_n"),
+        "birth_rate_last5": _rate_from_demo(demo_recent, "births_n"),
+        "closure_rate_last5": _rate_from_demo(demo_recent, "closures_terminal_n"),
+        "net_rate_last5": _rate_from_demo(demo_recent, "net_n"),
+        "births_share_universe": _safe_div(demo_sum.get("births_total_2000_2024", 0), universe_n),
+        "closures_share_universe": _safe_div(demo_sum.get("closures_terminal_total_2000_2024", 0), universe_n),
+        "net_share_universe": _safe_div(demo_sum.get("net_total_2000_2024", 0), universe_n),
+    }
+
+    top3_cantons = _topk_labels(cant, "canton", "ruc_share", k=3)
+    macro_top = macro.sort_values("ruc_n", ascending=False) if not macro.empty else pd.DataFrame()
+    top3_macro = _topk_labels(macro_top, "macro_sector", "share", k=3)
 
     metrics = {
         "schema_version": "1.0",
@@ -1724,8 +1937,11 @@ def run_provincia(
         qc2,
         demo_sum,
         demo_recent_sum,
+        demo_rates,
         geo_conc | {"leading_canton": leading_canton},
+        top3_cantons,
         sector_sum,
+        top3_macro,
         surv_kpis,
         est_per_ruc,
         multi_prov_stats,
