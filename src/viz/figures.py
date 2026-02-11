@@ -138,7 +138,9 @@ def _render_table(ax, rows: list[tuple[str, str]], title: str) -> None:
                 cell.set_text_props(fontsize=9, color='#4a5568')
 
 
-def _plot_km_multi(ax, km_map: dict[str, pd.DataFrame], subtitle: str) -> None:
+def _plot_km_multi(ax, km_map: dict[str, pd.DataFrame], subtitle: str,
+                   max_months: float | None = None,
+                   label_prefix: str = "") -> None:
     if not km_map:
         ax.text(0.5, 0.5, "KM no disponible", ha="center", va="center")
         ax.set_axis_off()
@@ -152,7 +154,8 @@ def _plot_km_multi(ax, km_map: dict[str, pd.DataFrame], subtitle: str) -> None:
         if km is None or km.empty:
             continue
         color = colors[idx]
-        ax.step(km["t"], km["s"], where="post", label=str(label), linewidth=2.2, color=color)
+        display_label = f"{label_prefix} {label}" if label_prefix else str(label)
+        ax.step(km["t"], km["s"], where="post", label=display_label, linewidth=2.2, color=color)
         ax.fill_between(km["t"], 0, km["s"], step="post", alpha=0.15, color=color)
         if not km["t"].empty:
             t_max_vals.append(float(km["t"].max()))
@@ -161,16 +164,19 @@ def _plot_km_multi(ax, km_map: dict[str, pd.DataFrame], subtitle: str) -> None:
             x = float(last["t"].iloc[0])
             y = float(last["s"].iloc[0])
             ax.plot(x, y, 'o', markersize=6, color=color)
-            ax.text(x, y, f"{label}: {_fmt_percent(y)}", fontsize=8, ha="left", va="center", fontweight='600')
+            ax.text(x, y, f"{display_label}: {_fmt_percent(y)}", fontsize=8, ha="left", va="center", fontweight='600')
 
     ax.set_ylim(0, 1.02)
     ax.set_xlabel("Meses desde inicio", fontweight='600')
     ax.set_ylabel("Supervivencia (Kaplan–Meier)", fontweight='600')
     ax.set_title(subtitle, fontsize=10, fontweight='600')
     ax.legend(fontsize=8, loc="best", frameon=True, shadow=True)
-    limit = _km_xlim(t_max_vals)
-    if limit:
-        ax.set_xlim(0, limit)
+    if max_months:
+        ax.set_xlim(0, max_months)
+    else:
+        limit = _km_xlim(t_max_vals)
+        if limit:
+            ax.set_xlim(0, limit)
 
 def _trim_text(value: object, max_len: int = 60) -> str:
     text = "" if value is None else str(value)
@@ -628,17 +634,30 @@ def save_km_plot(
     plt.close(fig)
 
 
-def save_km_multi(km_map: dict[str, pd.DataFrame], outpath: str, title: str):
+def save_km_multi(km_map: dict[str, pd.DataFrame], outpath: str, title: str,
+                  max_months: float | None = None, top_n: int | None = None,
+                  label_prefix: str = ""):
+    # Filtrar a los top_n grupos por longitud de curva KM
+    if top_n and km_map:
+        sorted_keys = sorted(km_map.keys(),
+                             key=lambda k: len(km_map[k]) if km_map[k] is not None else 0,
+                             reverse=True)[:top_n]
+        km_map = {k: km_map[k] for k in sorted_keys}
+    total_shown = len(km_map)
+
     fig, ax = plt.subplots(figsize=(10, 6))
     fig.patch.set_facecolor('white')
     if not km_map:
         ax.text(0.5, 0.5, "KM estratificado no disponible (umbral insuficiente)", ha="center", va="center")
     else:
-        _plot_km_multi(ax, km_map, "")
+        _plot_km_multi(ax, km_map, "", max_months=max_months, label_prefix=label_prefix)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
     ax.set_title(title, fontweight='bold', color='#2d3748')
-    fig.text(0.01, 0.01, "Asociativo, no causal.", fontsize=8, ha="left", color='#718096')
+    note = "Asociativo, no causal."
+    if top_n:
+        note += f"  Se muestran los {total_shown} grupos con más observaciones."
+    fig.text(0.01, 0.01, note, fontsize=8, ha="left", color='#718096')
     fig.tight_layout(rect=[0, 0.04, 1, 1])
     fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white')
     plt.close(fig)

@@ -1326,6 +1326,9 @@ def run_provincia(
             km_sector,
             str(_figure_path(out_base, "km_sector.png")),
             f"KM por macro-sector — {prov_output}",
+            max_months=window_max_months,
+            top_n=5,
+            label_prefix="Macro sector",
         )
         comparativa_figures += 1
 
