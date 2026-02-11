@@ -1,6 +1,7 @@
 from __future__ import annotations
 import math
 import unicodedata
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -138,9 +139,99 @@ def _render_table(ax, rows: list[tuple[str, str]], title: str) -> None:
                 cell.set_text_props(fontsize=9, color='#4a5568')
 
 
+def _logrank_test(km_map: dict[str, pd.DataFrame]) -> float | None:
+    """Multi-group log-rank test. Returns p-value or None."""
+    if len(km_map) < 2:
+        return None
+    try:
+        # Collect all unique event times across groups
+        all_times: set[int] = set()
+        for km in km_map.values():
+            if km is not None and not km.empty:
+                all_times.update(km.loc[km["d_events"] > 0, "t"].tolist())
+        if not all_times:
+            return None
+        times = sorted(all_times)
+
+        groups = list(km_map.keys())
+        # For each group build lookup dicts
+        d_j: dict[str, dict[int, int]] = {}  # events at t
+        n_j: dict[str, dict[int, int]] = {}  # at risk at t
+        for g in groups:
+            km = km_map[g]
+            if km is None or km.empty:
+                d_j[g] = {}
+                n_j[g] = {}
+                continue
+            d_j[g] = dict(zip(km["t"], km["d_events"]))
+            n_j[g] = dict(zip(km["t"], km["n_at_risk"]))
+
+        # Compute O - E for each group and variance
+        O_E = {g: 0.0 for g in groups}
+        V = {g: 0.0 for g in groups}
+        for t in times:
+            d_total = sum(d_j[g].get(t, 0) for g in groups)
+            n_total = sum(n_j[g].get(t, 0) for g in groups)
+            if n_total == 0 or d_total == 0:
+                continue
+            for g in groups:
+                n_g = n_j[g].get(t, 0)
+                d_g = d_j[g].get(t, 0)
+                e_g = n_g * d_total / n_total
+                O_E[g] += d_g - e_g
+                if n_total > 1:
+                    V[g] += e_g * (1 - n_g / n_total) * (n_total - d_total) / (n_total - 1)
+
+        # Chi-square statistic (K-1 df approximation using sum of (O-E)^2/V)
+        chi2 = 0.0
+        df_test = 0
+        for g in groups:
+            if V[g] > 0:
+                chi2 += O_E[g] ** 2 / V[g]
+                df_test += 1
+        df_test = max(df_test - 1, 1)
+
+        # p-value from chi2 using survival function approximation
+        # Use regularized incomplete gamma function via simple numerical integration
+        p = _chi2_sf(chi2, df_test)
+        return p
+    except Exception:
+        return None
+
+
+def _chi2_sf(x: float, k: int) -> float:
+    """Survival function of chi-squared distribution (1 - CDF)."""
+    if x <= 0:
+        return 1.0
+    # Use the regularized incomplete gamma function via series expansion
+    a = k / 2.0
+    return 1.0 - _lower_incomplete_gamma_reg(a, x / 2.0)
+
+
+def _lower_incomplete_gamma_reg(a: float, x: float) -> float:
+    """Regularized lower incomplete gamma P(a, x) via series expansion."""
+    if x < 0:
+        return 0.0
+    if x == 0:
+        return 0.0
+    # Series: P(a, x) = e^(-x) * x^a * sum(x^n / gamma(a+n+1))
+    # = sum of terms t_n, where t_0 = e^(-x) * x^a / Gamma(a+1)
+    # t_{n+1} = t_n * x / (a + n + 1)
+    term = 1.0 / a
+    total = term
+    for n in range(1, 300):
+        term *= x / (a + n)
+        total += term
+        if abs(term) < 1e-12 * abs(total):
+            break
+    result = math.exp(-x + a * math.log(x) - math.lgamma(a)) * total
+    return min(max(result, 0.0), 1.0)
+
+
 def _plot_km_multi(ax, km_map: dict[str, pd.DataFrame], subtitle: str,
                    max_months: float | None = None,
-                   label_prefix: str = "") -> None:
+                   label_prefix: str = "",
+                   group_sizes: dict[str, int] | None = None) -> None:
     if not km_map:
         ax.text(0.5, 0.5, "KM no disponible", ha="center", va="center")
         ax.set_axis_off()
@@ -155,6 +246,8 @@ def _plot_km_multi(ax, km_map: dict[str, pd.DataFrame], subtitle: str,
             continue
         color = colors[idx]
         display_label = f"{label_prefix} {label}" if label_prefix else str(label)
+        if group_sizes and label in group_sizes:
+            display_label += f" (n={group_sizes[label]:,})"
         ax.step(km["t"], km["s"], where="post", label=display_label, linewidth=2.2, color=color)
         ax.fill_between(km["t"], 0, km["s"], step="post", alpha=0.15, color=color)
         if not km["t"].empty:
@@ -640,27 +733,39 @@ def save_km_plot(
 
 def save_km_multi(km_map: dict[str, pd.DataFrame], outpath: str, title: str,
                   max_months: float | None = None, top_n: int | None = None,
-                  label_prefix: str = ""):
+                  label_prefix: str = "",
+                  group_sizes: dict[str, int] | None = None):
     # Filtrar a los top_n grupos por longitud de curva KM
     if top_n and km_map:
         sorted_keys = sorted(km_map.keys(),
                              key=lambda k: len(km_map[k]) if km_map[k] is not None else 0,
                              reverse=True)[:top_n]
         km_map = {k: km_map[k] for k in sorted_keys}
-    total_shown = len(km_map)
+        if group_sizes:
+            group_sizes = {k: group_sizes[k] for k in sorted_keys if k in group_sizes}
 
     fig, ax = plt.subplots(figsize=(10, 6))
     fig.patch.set_facecolor('white')
     if not km_map:
         ax.text(0.5, 0.5, "KM estratificado no disponible (umbral insuficiente)", ha="center", va="center")
     else:
-        _plot_km_multi(ax, km_map, "", max_months=max_months, label_prefix=label_prefix)
+        _plot_km_multi(ax, km_map, "", max_months=max_months, label_prefix=label_prefix,
+                       group_sizes=group_sizes)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
     ax.set_title(title, fontweight='bold', color='#2d3748')
+
+    # Log-rank test
+    lr_pval = _logrank_test(km_map) if len(km_map) >= 2 else None
+
     note = "Asociativo, no causal."
     if top_n:
         note += f"  Se muestran hasta {top_n} grupos con más observaciones."
+    if lr_pval is not None:
+        if lr_pval < 0.001:
+            note += f"  Log-rank p < 0.001."
+        else:
+            note += f"  Log-rank p = {lr_pval:.3f}."
     fig.text(0.01, 0.01, note, fontsize=8, ha="left", color='#718096')
     fig.tight_layout(rect=[0, 0.04, 1, 1])
     fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white')

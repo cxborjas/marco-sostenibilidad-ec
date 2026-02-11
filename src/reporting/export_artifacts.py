@@ -1323,6 +1323,8 @@ def run_provincia(
     if not tab_sector.empty:
         write_csv(tab_sector, _table_path(out_base, "comparativa_sector.csv"))
         comparativa_tables += 1
+        # Construir dict de tamaño muestral por sector desde tab_sector
+        _sector_sizes = dict(zip(tab_sector["group"], tab_sector["group_n"].astype(int)))
         save_km_multi(
             km_sector,
             str(_figure_path(out_base, "km_sector.png")),
@@ -1330,6 +1332,7 @@ def run_provincia(
             max_months=window_max_months,
             top_n=5,
             label_prefix="Macro sector",
+            group_sizes=_sector_sizes,
         )
         comparativa_figures += 1
 
