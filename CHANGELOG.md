@@ -10,6 +10,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - La carpeta `outputs/*/data/` ahora siempre se genera (raw_filtrado.csv, ruc_master.parquet), pero se excluye de git.
 - F01: picos de creación y cierre integrados en la caja de leyenda en lugar de anotaciones flotantes.
 - F03: nota al pie ahora siempre reporta el conteo y share de "No informado" (antes solo aparecía si ≥ 10%).
+- F04: gráfico rediseñado a barras horizontales con nombre de actividad dentro de cada barra; eliminada tabla lateral.
 
 ### Fixes
 - Lista de provincias reorganizada en 3 columnas para mostrarla completa sin truncamiento.

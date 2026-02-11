@@ -359,61 +359,56 @@ def save_bar_actividades(act: pd.DataFrame, outpath: str, title: str):
         plt.close(fig)
         return
 
-    fig = plt.figure(figsize=(11, 5))
-    gs = fig.add_gridspec(nrows=1, ncols=2, width_ratios=[3, 2])
-    ax = fig.add_subplot(gs[0, 0])
-    ax_table = fig.add_subplot(gs[0, 1])
+    data = act.sort_values("ruc_n", ascending=True).copy()
+    n = len(data)
+    fig_height = max(5.5, 0.45 * n)
+    fig, ax = plt.subplots(figsize=(11, fig_height))
+    fig.patch.set_facecolor('white')
 
-    data = act.sort_values("ruc_n", ascending=False).copy()
-    labels = data["ciiu"].astype("string")
-    positions = range(len(labels))
-    bars = ax.bar(positions, data["ruc_n"], color="#1f77b4")
-    ax.set_xlabel("Código CIIU")
-    ax.set_ylabel("RUC (sociedades)")
-    ax.set_xticks(positions)
-    ax.set_xticklabels(labels, rotation=45, ha="right")
-    ymax = max(data["ruc_n"].max(), 1)
-    ax.set_ylim(0, ymax * 1.15)
-    for bar, value, share in zip(bars, data["ruc_n"], data.get("share"), strict=False):
-        label = _fmt_int(value)
-        if _is_finite_number(share):
-            label = f"{label} ({_fmt_percent(share)})"
-        x = bar.get_x() + bar.get_width() / 2
-        y = bar.get_height()
-        offset = ymax * 0.02
-        if y + offset > ax.get_ylim()[1]:
-            ax.text(x, y - offset, label, ha="center", va="top", fontsize=7, color="white")
+    colors = [COLOR_PALETTE[i % len(COLOR_PALETTE)] for i in range(n)]
+    y_pos = range(n)
+    bars = ax.barh(y_pos, data["ruc_n"], color=colors, edgecolor='white', linewidth=1.2, alpha=0.85)
+
+    # Etiqueta: actividad dentro de la barra, valor+share fuera
+    xmax = max(data["ruc_n"].max(), 1)
+    for i, (bar, ciiu, actividad, value, share) in enumerate(zip(
+        bars,
+        data["ciiu"].astype("string"),
+        data["actividad"].astype("string"),
+        data["ruc_n"],
+        data.get("share"),
+        strict=False,
+    )):
+        # Nombre de actividad dentro de la barra
+        act_label = _trim_text(f"{ciiu} - {actividad}", max_len=50)
+        bar_w = bar.get_width()
+        if bar_w > xmax * 0.25:
+            ax.text(bar_w * 0.02, i, f" {act_label}", va="center", ha="left",
+                    fontsize=7, fontweight='600', color="white")
         else:
-            ax.text(x, y + offset, label, ha="center", va="bottom", fontsize=7)
+            ax.text(bar_w + xmax * 0.005, i, f" {act_label}", va="center", ha="left",
+                    fontsize=7, fontweight='600', color="#4a5568")
 
-    table_rows = list(
-        zip(
-            data["ciiu"].apply(lambda v: _trim_text(v, max_len=12)),
-            data["actividad"].apply(lambda v: _trim_text(v, max_len=36)),
-            strict=False,
-        )
-    )
-    ax_table.axis("off")
-    ax_table.set_title("Código → Actividad", fontsize=9, fontweight="bold", pad=6)
-    code_lengths = act["ciiu"].astype("string").str.len().fillna(0).astype(int)
-    code_max_len = int(code_lengths.max()) if not code_lengths.empty else 0
-    code_width = min(max(code_max_len / 20.0, 0.18), 0.4)
-    table = ax_table.table(
-        cellText=table_rows,
-        colLabels=["Código", "Actividad"],
-        loc="center",
-        colWidths=[code_width, 1.0 - code_width],
-        cellLoc="left",
-        colLoc="left",
-    )
-    table.auto_set_font_size(False)
-    table.set_fontsize(7)
-    table.scale(1, 1.2)
+        # Valor numérico al final de la barra
+        num_label = _fmt_int(value)
+        if _is_finite_number(share):
+            num_label = f"{num_label} ({_fmt_percent(share)})"
+        ax.text(bar_w, i, f"  {num_label} ", va="center", ha="left" if bar_w < xmax * 0.85 else "right",
+                fontsize=7.5, fontweight='600',
+                color="#2d3748" if bar_w < xmax * 0.85 else "white")
 
-    ax.set_title(title)
-    fig.text(0.01, 0.01, "Unidad: RUC por actividad (CIIU). Ranking sobre total RUC.", fontsize=7, ha="left")
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(data["ciiu"].astype("string"), fontsize=8)
+    ax.set_xlabel("RUC (sociedades)", fontweight='600')
+    ax.set_ylabel("Código CIIU", fontweight='600')
+    ax.set_xlim(0, xmax * 1.25)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    ax.set_title(title, fontweight='bold', color='#2d3748')
+    fig.text(0.01, 0.01, "Unidad: RUC por actividad (CIIU). Ranking sobre total RUC.", fontsize=7, ha="left", color='#718096')
     fig.tight_layout(rect=[0, 0.05, 1, 1])
-    fig.savefig(outpath, dpi=200)
+    fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white')
     plt.close(fig)
 
 def save_bar_cohortes(coh: pd.DataFrame, outpath: str, title: str) -> None:
