@@ -1316,15 +1316,12 @@ def run_provincia(
     comparativa_figures = 0
 
     tab_sector, km_sector = kpis_by_group(ruc_cmp, "macro_sector", critical_bins_months=critical_bins,
-                                          min_n=max(cmp_min_n // 4, 30),
-                                          min_events=max(cmp_min_events // 3, 5),
-                                          max_groups=max(cmp_max_groups_sector, 10),
+                                          min_n=cmp_min_n, min_events=cmp_min_events,
+                                          max_groups=cmp_max_groups_sector,
                                           max_no_informado_share=cmp_max_no_info)
     if not tab_sector.empty:
         write_csv(tab_sector, _table_path(out_base, "comparativa_sector.csv"))
         comparativa_tables += 1
-        # Construir dict de tamaño muestral por sector desde tab_sector
-        _sector_sizes = dict(zip(tab_sector["group"], tab_sector["group_n"].astype(int)))
         save_km_multi(
             km_sector,
             str(_figure_path(out_base, "km_sector.png")),
@@ -1332,7 +1329,6 @@ def run_provincia(
             max_months=window_max_months,
             top_n=5,
             label_prefix="Macro sector",
-            group_sizes=_sector_sizes,
         )
         comparativa_figures += 1
 
@@ -1344,14 +1340,12 @@ def run_provincia(
     if not tab_canton.empty:
         write_csv(tab_canton, _table_path(out_base, "comparativa_canton_top5.csv"))
         comparativa_tables += 1
-        _canton_sizes = dict(zip(tab_canton["group"], tab_canton["group_n"].astype(int)))
         save_km_multi(
             km_canton,
             str(_figure_path(out_base, "km_canton_topN.png")),
             f"KM por cantón — {prov_output}",
             max_months=window_max_months,
             top_n=5,
-            group_sizes=_canton_sizes,
         )
         comparativa_figures += 1
 
