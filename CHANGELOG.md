@@ -9,6 +9,7 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 - Mejora visual en la selección de provincias del notebook `01_run_provincia.ipynb`.
 - La carpeta `outputs/*/data/` ahora siempre se genera (raw_filtrado.csv, ruc_master.parquet), pero se excluye de git.
 - F01: picos de creación y cierre integrados en la caja de leyenda en lugar de anotaciones flotantes.
+- F03: nota al pie ahora siempre reporta el conteo y share de "No informado" (antes solo aparecía si ≥ 10%).
 
 ### Fixes
 - Lista de provincias reorganizada en 3 columnas para mostrarla completa sin truncamiento.

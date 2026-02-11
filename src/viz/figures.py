@@ -331,9 +331,17 @@ def save_bar_macro(macro: pd.DataFrame, outpath: str, title: str):
             ax.text(value, y, f" {label}", va="center", fontsize=8, fontweight='600')
 
         note_parts = ["Unidad: RUC por macro-sector."]
-        no_info = data.loc[data["macro_sector"].str.upper() == "NO INFORMADO", "share"]
-        if not no_info.empty and _is_finite_number(no_info.iloc[0]) and float(no_info.iloc[0]) >= 0.1:
-            note_parts.append("No informado alto; interpretar shares sobre base informada.")
+        no_info_mask = data["macro_sector"].str.upper() == "NO INFORMADO"
+        no_info_rows = data.loc[no_info_mask]
+        if not no_info_rows.empty:
+            ni_n = int(no_info_rows["ruc_n"].iloc[0])
+            ni_s = no_info_rows["share"].iloc[0]
+            ni_txt = f"No informado: {_fmt_int(ni_n)} ({_fmt_percent(ni_s)})"
+            if _is_finite_number(ni_s) and float(ni_s) >= 0.1:
+                ni_txt += " — interpretar shares sobre base informada."
+            note_parts.append(ni_txt)
+        else:
+            note_parts.append("No informado: 0 (0.0%).")
         fig.text(0.01, 0.01, " ".join(note_parts), fontsize=7, ha="left", color='#718096')
 
     ax.set_title(title, fontweight='bold', color='#2d3748')
