@@ -1316,8 +1316,9 @@ def run_provincia(
     comparativa_figures = 0
 
     tab_sector, km_sector = kpis_by_group(ruc_cmp, "macro_sector", critical_bins_months=critical_bins,
-                                          min_n=cmp_min_n, min_events=cmp_min_events,
-                                          max_groups=cmp_max_groups_sector,
+                                          min_n=max(cmp_min_n // 4, 30),
+                                          min_events=max(cmp_min_events // 3, 5),
+                                          max_groups=max(cmp_max_groups_sector, 10),
                                           max_no_informado_share=cmp_max_no_info)
     if not tab_sector.empty:
         write_csv(tab_sector, _table_path(out_base, "comparativa_sector.csv"))
