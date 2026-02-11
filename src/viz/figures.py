@@ -159,12 +159,16 @@ def _plot_km_multi(ax, km_map: dict[str, pd.DataFrame], subtitle: str,
         ax.fill_between(km["t"], 0, km["s"], step="post", alpha=0.15, color=color)
         if not km["t"].empty:
             t_max_vals.append(float(km["t"].max()))
-        last = km.dropna(subset=["t", "s"]).tail(1)
-        if not last.empty:
-            x = float(last["t"].iloc[0])
-            y = float(last["s"].iloc[0])
+        # Punto final: recortar a max_months para no desbordar
+        if max_months:
+            clip = km[km["t"] <= max_months].dropna(subset=["t", "s"]).tail(1)
+        else:
+            clip = km.dropna(subset=["t", "s"]).tail(1)
+        if not clip.empty:
+            x = float(clip["t"].iloc[0])
+            y = float(clip["s"].iloc[0])
             ax.plot(x, y, 'o', markersize=6, color=color)
-            ax.text(x, y, f"{display_label}: {_fmt_percent(y)}", fontsize=8, ha="left", va="center", fontweight='600')
+            ax.text(x, y, f" {_fmt_percent(y)}", fontsize=8, ha="left", va="center", fontweight='600', color=color)
 
     ax.set_ylim(0, 1.02)
     ax.set_xlabel("Meses desde inicio", fontweight='600')
@@ -656,7 +660,7 @@ def save_km_multi(km_map: dict[str, pd.DataFrame], outpath: str, title: str,
     ax.set_title(title, fontweight='bold', color='#2d3748')
     note = "Asociativo, no causal."
     if top_n:
-        note += f"  Se muestran los {total_shown} grupos con más observaciones."
+        note += f"  Se muestran hasta {top_n} grupos con más observaciones."
     fig.text(0.01, 0.01, note, fontsize=8, ha="left", color='#718096')
     fig.tight_layout(rect=[0, 0.04, 1, 1])
     fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white')
