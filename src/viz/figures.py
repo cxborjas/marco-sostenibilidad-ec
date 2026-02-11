@@ -110,6 +110,47 @@ def _fmt_pvalue(value) -> str:
         return "<0.001"
     return f"{v:.3f}"
 
+def _survival_at_time(km: pd.DataFrame, t: float) -> float:
+    if km is None or km.empty or "t" not in km.columns or "s" not in km.columns:
+        return float("nan")
+    km2 = km[km["t"] <= t]
+    if km2.empty:
+        return 1.0
+    return float(km2["s"].iloc[-1])
+
+def _add_at_risk_table(ax, times: list[int], at_risk: dict[str, list[int]],
+                       label_map: dict[str, str] | None = None,
+                       row_order: list[str] | None = None,
+                       y_offset: float | None = None) -> None:
+    if not at_risk or not times:
+        return
+    order = row_order or list(at_risk.keys())
+    order = [g for g in order if g in at_risk]
+    if not order:
+        return
+    col_labels = [str(int(t)) for t in times]
+    row_labels = [label_map.get(g, g) if label_map else g for g in order]
+    cell_text = []
+    for g in order:
+        row_vals = at_risk.get(g, [])
+        cell_text.append([_fmt_int(v) for v in row_vals])
+
+    n_rows = len(order)
+    if y_offset is None:
+        y_offset = -0.35 - 0.08 * max(n_rows - 1, 0)
+    height = 0.18 + 0.05 * max(n_rows - 1, 0)
+    table = ax.table(
+        cellText=cell_text,
+        rowLabels=row_labels,
+        colLabels=col_labels,
+        cellLoc="center",
+        rowLoc="center",
+        bbox=[0.0, y_offset, 1.0, height],
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(8)
+    table.scale(1, 1.2)
+
 
 def _is_finite_number(value) -> bool:
     try:
@@ -153,7 +194,13 @@ def _plot_km_multi(ax, km_map: dict[str, pd.DataFrame], subtitle: str,
                    max_months: float | None = None,
                    label_prefix: str = "",
                    fill: bool = True,
-                   group_counts: dict[str, int] | None = None) -> None:
+                   group_counts: dict[str, int] | None = None,
+                   group_stats: dict[str, dict[str, int]] | None = None,
+                   label_map: dict[str, str] | None = None,
+                   show_last_point: bool = True,
+                   milestone_times: list[int] | None = None,
+                   milestone_label_time: int | None = None,
+                   line_styles: list[str] | None = None) -> None:
     if not km_map:
         ax.text(0.5, 0.5, "KM no disponible", ha="center", va="center")
         ax.set_axis_off()
@@ -167,26 +214,58 @@ def _plot_km_multi(ax, km_map: dict[str, pd.DataFrame], subtitle: str,
         if km is None or km.empty:
             continue
         color = colors[idx]
-        display_label = f"{label_prefix} {label}" if label_prefix else str(label)
-        if group_counts:
-            count = group_counts.get(str(label))
+        label_raw = str(label)
+        display_label = label_map.get(label_raw, label_raw) if label_map else label_raw
+        if label_prefix:
+            display_label = f"{label_prefix} {display_label}"
+        if group_stats:
+            stats = group_stats.get(label_raw)
+            if stats:
+                n_txt = _fmt_int(stats.get("n"))
+                ev_txt = _fmt_int(stats.get("events"))
+                cens_txt = _fmt_int(stats.get("censored"))
+                display_label = f"{display_label} (n={n_txt}; ev={ev_txt}; cens={cens_txt})"
+        elif group_counts:
+            count = group_counts.get(label_raw)
             if count is not None:
                 display_label = f"{display_label} (n={_fmt_int(count)})"
-        ax.step(km["t"], km["s"], where="post", label=display_label, linewidth=2.2, color=color)
+        linestyle = line_styles[idx % len(line_styles)] if line_styles else "solid"
+        ax.step(
+            km["t"],
+            km["s"],
+            where="post",
+            label=display_label,
+            linewidth=2.4,
+            color=color,
+            linestyle=linestyle,
+        )
         if fill:
             ax.fill_between(km["t"], 0, km["s"], step="post", alpha=0.15, color=color)
         if not km["t"].empty:
             t_max_vals.append(float(km["t"].max()))
-        # Punto final: recortar a max_months para no desbordar
-        if max_months:
-            clip = km[km["t"] <= max_months].dropna(subset=["t", "s"]).tail(1)
-        else:
-            clip = km.dropna(subset=["t", "s"]).tail(1)
-        if not clip.empty:
-            x = float(clip["t"].iloc[0])
-            y = float(clip["s"].iloc[0])
-            ax.plot(x, y, 'o', markersize=6, color=color)
-            ax.text(x, y, f" {_fmt_percent(y)}", fontsize=8, ha="left", va="center", fontweight='600', color=color)
+        if show_last_point:
+            # Punto final: recortar a max_months para no desbordar
+            if max_months:
+                clip = km[km["t"] <= max_months].dropna(subset=["t", "s"]).tail(1)
+            else:
+                clip = km.dropna(subset=["t", "s"]).tail(1)
+            if not clip.empty:
+                x = float(clip["t"].iloc[0])
+                y = float(clip["s"].iloc[0])
+                ax.plot(x, y, 'o', markersize=6, color=color)
+                ax.text(x, y, f" {_fmt_percent(y)}", fontsize=8, ha="left", va="center",
+                        fontweight='600', color=color)
+
+        if milestone_times:
+            label_time = milestone_label_time or max(milestone_times)
+            for t_ref in milestone_times:
+                y_ref = _survival_at_time(km, t_ref)
+                if not math.isfinite(y_ref):
+                    continue
+                ax.plot(t_ref, y_ref, 'o', markersize=4, color=color, alpha=0.9)
+                if t_ref == label_time:
+                    ax.text(t_ref, y_ref, f" {_fmt_percent(y_ref)}", fontsize=8, ha="left",
+                            va="center", fontweight='600', color=color)
 
     ax.set_ylim(0, 1.02)
     ax.set_xlabel("Meses desde inicio", fontweight='600')
@@ -660,6 +739,14 @@ def save_km_multi(km_map: dict[str, pd.DataFrame], outpath: str, title: str,
                   max_months: float | None = None, top_n: int | None = None,
                   label_prefix: str = "", fill: bool = True,
                   group_counts: dict[str, int] | None = None,
+                  group_stats: dict[str, dict[str, int]] | None = None,
+                  label_map: dict[str, str] | None = None,
+                  show_last_point: bool = True,
+                  milestone_times: list[int] | None = None,
+                  milestone_label_time: int | None = None,
+                  line_styles: list[str] | None = None,
+                  at_risk: dict[str, list[int]] | None = None,
+                  at_risk_times: list[int] | None = None,
                   extra_note: str | None = None):
     # Filtrar a los top_n grupos por longitud de curva KM
     if top_n and km_map:
@@ -682,6 +769,12 @@ def save_km_multi(km_map: dict[str, pd.DataFrame], outpath: str, title: str,
             label_prefix=label_prefix,
             fill=fill,
             group_counts=group_counts,
+            group_stats=group_stats,
+            label_map=label_map,
+            show_last_point=show_last_point,
+            milestone_times=milestone_times,
+            milestone_label_time=milestone_label_time,
+            line_styles=line_styles,
         )
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
@@ -691,8 +784,15 @@ def save_km_multi(km_map: dict[str, pd.DataFrame], outpath: str, title: str,
         note += f"  Se muestran hasta {top_n} grupos con más observaciones."
     if extra_note:
         note += f"  {extra_note}"
-    fig.text(0.01, 0.01, note, fontsize=8, ha="left", color='#718096')
-    fig.tight_layout(rect=[0, 0.04, 1, 1])
+    note_y = 0.01
+    bottom_pad = 0.04
+    if at_risk and at_risk_times:
+        _add_at_risk_table(ax, at_risk_times, at_risk, label_map=label_map, row_order=list(km_map.keys()))
+        ax.tick_params(axis='x', pad=4)
+        bottom_pad = 0.22 + 0.06 * len(at_risk)
+        note_y = min(0.12 + 0.02 * len(at_risk), 0.22)
+    fig.text(0.01, note_y, note, fontsize=8, ha="left", color='#718096')
+    fig.tight_layout(rect=[0, bottom_pad, 1, 1])
     fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white')
     plt.close(fig)
 

@@ -24,7 +24,8 @@ from src.metrics.demografia import demografia_anual, cohortes, cohort_5y_label
 from src.metrics.geografia import cantones_topN_from_raw, concentracion_topk, cantones_share_from_raw
 from src.metrics.sectorial import macro_sectores, top_actividades, diversificacion_simple
 
-from src.metrics.supervivencia import survival_kpis, kpis_by_group, logrank_test_multi
+from src.metrics.supervivencia import survival_kpis, kpis_by_group, logrank_test_multi, at_risk_by_group
+from src.utils.km import survival_at
 from src.metrics.comparativas import add_scale_bucket, add_canton_topN_bucket, SCALE_BUCKET_ORDER
 
 from src.viz.figures import (
@@ -95,6 +96,17 @@ def _fmt_pvalue(value) -> str:
     if v < 0.001:
         return "<0.001"
     return f"{v:.3f}"
+
+def _fmt_pct(value) -> str:
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return "N/A"
+    if not math.isfinite(v):
+        return "N/A"
+    if v > 1.05:
+        return f"{v:.1f}%"
+    return f"{v * 100:.1f}%"
 
 
 class _ProgressPrinter:
@@ -1371,10 +1383,106 @@ def run_provincia(
             if not tab_flag.empty:
                 write_csv(tab_flag, _table_path(out_base, f"comparativa_{flag}.csv"))
                 comparativa_tables += 1
+                title = f"KM por {flag} — {prov_output}"
+                fill = True
+                extra_note = None
+                group_stats = None
+                label_map = None
+                show_last_point = True
+                milestone_times = None
+                milestone_label_time = None
+                at_risk = None
+                at_risk_times = None
+                max_months_flag = None
+                line_styles = None
+
+                if flag == "obligado_3cat":
+                    title = f"KM por Obligación (Sí vs No) — {prov_output}"
+                    fill = False
+                    show_last_point = False
+                    max_months_flag = window_max_months
+                    line_styles = ["solid", "dashed"]
+
+                    group_stats = {}
+                    for _, row in tab_flag.iterrows():
+                        grp = str(row.get("group"))
+                        if grp in km_flag:
+                            n = row.get("group_n")
+                            ev = row.get("group_events_n")
+                            if pd.notna(n) and pd.notna(ev):
+                                n_i = int(n)
+                                ev_i = int(ev)
+                                group_stats[grp] = {"n": n_i, "events": ev_i, "censored": max(n_i - ev_i, 0)}
+
+                    def _map_obligado_label(value: str) -> str:
+                        v = str(value).strip().upper()
+                        if v in {"SI", "SÍ"}:
+                            return "Sí"
+                        if v == "NO":
+                            return "No"
+                        if v in {"NO INFORMADO", "N/I", "NA"}:
+                            return "No informado"
+                        return str(value)
+
+                    label_map = {g: _map_obligado_label(g) for g in km_flag.keys()}
+
+                    included_groups = list(km_flag.keys())
+                    logrank_note = None
+                    if len(included_groups) >= 2:
+                        lr = logrank_test_multi(ruc_cmp, flag, groups=included_groups)
+                        if math.isfinite(lr.get("chi2", float("nan"))):
+                            p_val = lr.get("p_value")
+                            sig = None
+                            if isinstance(p_val, (int, float)) and math.isfinite(p_val):
+                                sig = "significativo" if p_val < 0.05 else "no significativo"
+                            sig_txt = f" ({sig})" if sig else ""
+                            logrank_note = (
+                                f"Log-rank χ²={lr['chi2']:.2f} (df={lr['df']}), "
+                                f"p={_fmt_pvalue(p_val)}{sig_txt}"
+                            )
+
+                    milestone_times = [60, 120, 300]
+                    if max_months_flag is not None:
+                        milestone_times = [t for t in milestone_times if t <= max_months_flag]
+                    if milestone_times:
+                        milestone_label_time = max(milestone_times)
+                        milestone_parts = []
+                        for t_ref in milestone_times:
+                            vals = []
+                            for g in included_groups:
+                                s_val = survival_at(km_flag[g], t_ref)
+                                g_label = label_map.get(g, g) if label_map else g
+                                vals.append(f"{g_label}={_fmt_pct(s_val)}")
+                            milestone_parts.append(f"S({t_ref}) " + ", ".join(vals))
+                        milestone_note = " · ".join(milestone_parts)
+                    else:
+                        milestone_note = None
+
+                    at_risk_times = None
+                    at_risk = None
+
+                    window_note = None
+                    if max_months_flag is not None:
+                        window_note = f"Eje X limitado a {int(max_months_flag)} meses (ventana común)."
+
+                    extra_parts = [window_note, logrank_note, milestone_note]
+                    extra_note = " ".join([p for p in extra_parts if p])
+
                 save_km_multi(
                     km_flag,
                     str(_figure_path(out_base, f"km_{flag}.png")),
-                    f"KM por {flag} — {prov_output}",
+                    title,
+                    max_months=max_months_flag,
+                    fill=fill,
+                    group_stats=group_stats,
+                    label_map=label_map,
+                    show_last_point=show_last_point,
+                    milestone_times=milestone_times,
+                    milestone_label_time=milestone_label_time,
+                    line_styles=line_styles,
+                    at_risk=at_risk,
+                    at_risk_times=at_risk_times,
+                    extra_note=extra_note,
                 )
                 comparativa_figures += 1
                 km_flags_map[flag] = km_flag

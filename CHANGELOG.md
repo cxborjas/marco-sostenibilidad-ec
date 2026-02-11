@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows semantic versioning vMAJOR.MINOR.
 
+## v1.4 - 2026-02-11
+### Executive summary
+- F10 (KM por obligación): sin relleno; leyenda con n/eventos/censurados; log-rank con significancia.
+- F10: eje X limitado a la ventana común y marcadores comparables en hitos (S(60/120/300)); estilos de línea diferenciados.
+
+### Visualizations/Report
+- `save_km_multi` admite hitos comparables, estilos de línea y etiquetas ampliadas.
+
+### Methodology
+- Log-rank y comparaciones en hitos añadidas al KM por obligación.
+
 ## v1.3 - 2026-02-11
 ### Executive summary
 - F09 (KM por escala): eje X limitado a la ventana de análisis; sin relleno para comparación clara.

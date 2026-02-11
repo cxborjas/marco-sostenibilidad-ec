@@ -162,6 +162,39 @@ def logrank_test_multi(
     p_value = _chi2_sf(chi2, df_chi) if math.isfinite(chi2) else float("nan")
     return {"chi2": chi2, "df": df_chi, "p_value": p_value, "groups": group_list}
 
+def at_risk_by_group(
+    ruc: pd.DataFrame,
+    group_col: str,
+    times: list[int],
+    duration_col: str = "duration_months",
+    event_col: str = "event",
+    groups: list[str] | None = None,
+) -> dict[str, list[int]]:
+    if group_col not in ruc.columns:
+        return {}
+
+    df = ruc[[group_col, duration_col, event_col]].copy()
+    df[group_col] = df[group_col].astype("string").fillna("No informado").str.strip()
+    df[duration_col] = pd.to_numeric(df[duration_col], errors="coerce")
+    df[event_col] = pd.to_numeric(df[event_col], errors="coerce")
+    df = df[df[duration_col].notna() & df[event_col].isin([0, 1])]
+    df = df[df[duration_col] >= 0]
+
+    if groups:
+        df = df[df[group_col].isin(groups)]
+        group_list = [g for g in groups if g in set(df[group_col])]
+    else:
+        group_list = list(pd.unique(df[group_col]))
+
+    out: dict[str, list[int]] = {}
+    for g in group_list:
+        dur = df.loc[df[group_col] == g, duration_col].to_numpy()
+        if len(dur) == 0:
+            out[g] = [0 for _ in times]
+            continue
+        out[g] = [int((dur >= t).sum()) for t in times]
+    return out
+
 def survival_kpis(ruc: pd.DataFrame, critical_bins_months: list[list[int]] | None = None) -> tuple[dict, pd.DataFrame]:
     df = ruc.dropna(subset=["duration_months", "event"]).copy()
     df["duration_months"] = df["duration_months"].astype("Int64")
