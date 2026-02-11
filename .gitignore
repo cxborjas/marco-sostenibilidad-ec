@@ -17,6 +17,9 @@ outputs/*
 !outputs/release_manifest.json
 !outputs/Provincia/**
 
+# Excluir data generada de outputs (contiene datos sensibles)
+outputs/*/data/
+
 # OS
 .DS_Store
 Thumbs.db

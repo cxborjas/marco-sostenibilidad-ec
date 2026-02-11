@@ -7,9 +7,12 @@ The format is based on Keep a Changelog, and this project follows semantic versi
 ## v1.2 - 2026-02-11
 ### Executive summary
 - Mejora visual en la selección de provincias del notebook `01_run_provincia.ipynb`.
+- La carpeta `outputs/*/data/` ahora siempre se genera (raw_filtrado.csv, ruc_master.parquet), pero se excluye de git.
 
 ### Fixes
 - Lista de provincias reorganizada en 3 columnas para mostrarla completa sin truncamiento.
+- Eliminada la guarda `public_mode` que impedía la escritura de `data/`; los archivos se generan siempre localmente.
+- Agregada regla `outputs/*/data/` en `.gitignore` para excluir datos sensibles del repositorio.
 
 ## v1.1 - 2026-02-10
 ### Executive summary

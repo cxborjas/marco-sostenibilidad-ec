@@ -1029,8 +1029,7 @@ def run_provincia(
 
     qc1 = qc_raw(df, prov_output)
     write_json(out_base / "qc" / "qc_raw.json", qc1)
-    if not public_mode:
-        write_csv(df, out_base / "data" / "raw_filtrado.csv")
+    write_csv(df, out_base / "data" / "raw_filtrado.csv")
     progress.step(f"QC raw listo (RUC únicos: {qc1.get('unique_ruc', 'NA')})")
 
     est_per_ruc = establishments_per_ruc_summary(df)
@@ -1072,8 +1071,7 @@ def run_provincia(
     if "main_rule" in ruc.columns:
         main_rule_counts = ruc["main_rule"].astype("string").value_counts().to_dict()
         tracelog.event("main_rule", "main establishment rule", main_rule_counts)
-    if not public_mode:
-        write_parquet(ruc, out_base / "data" / "ruc_master.parquet")
+    write_parquet(ruc, out_base / "data" / "ruc_master.parquet")
     tracelog.event("collapse", "collapsed establishments -> RUC", {"ruc_rows": len(ruc)})
     progress.step(f"{len(ruc):,} RUC en ruc_master.parquet")
 
@@ -1611,7 +1609,7 @@ def main():
     ap.add_argument("--configs", default="configs", help="Carpeta configs/ (global.yaml).")
     ap.add_argument("--raw_dir", default="data/raw", help="Carpeta de raws (SRI_RUC_<Provincia>.csv).")
     ap.add_argument("--raw_path", default=None, help="Ruta exacta al raw (sobrescribe raw_dir+convención).")
-    ap.add_argument("--public", action="store_true", help="Modo publico: no exporta data/raw_filtrado ni ruc_master.")
+    ap.add_argument("--public", action="store_true", help="Modo publico: datos anonimizados en reporte.")
     ap.add_argument("--ruc_prov_counts", default=None, help="CSV/Parquet con conteo de provincias por RUC.")
     args = ap.parse_args()
     prov_cfg = _load_provincias_config(args.configs)
