@@ -194,13 +194,16 @@ def _plot_km_multi(ax, km_map: dict[str, pd.DataFrame], subtitle: str,
                    max_months: float | None = None,
                    label_prefix: str = "",
                    fill: bool = True,
+                   fill_alpha: float = 0.15,
                    group_counts: dict[str, int] | None = None,
                    group_stats: dict[str, dict[str, int]] | None = None,
                    label_map: dict[str, str] | None = None,
                    show_last_point: bool = True,
                    milestone_times: list[int] | None = None,
                    milestone_label_time: int | None = None,
-                   line_styles: list[str] | None = None) -> None:
+                   line_styles: list[str] | None = None,
+                   legend_only: list[str] | None = None,
+                   legend_only_suffix: str | None = None) -> None:
     if not km_map:
         ax.text(0.5, 0.5, "KM no disponible", ha="center", va="center")
         ax.set_axis_off()
@@ -210,11 +213,7 @@ def _plot_km_multi(ax, km_map: dict[str, pd.DataFrame], subtitle: str,
     t_max_vals: list[float] = []
     colors = COLOR_PALETTE[:len(km_map)] if len(km_map) <= len(COLOR_PALETTE) else COLOR_PALETTE * (len(km_map) // len(COLOR_PALETTE) + 1)
     
-    for idx, (label, km) in enumerate(km_map.items()):
-        if km is None or km.empty:
-            continue
-        color = colors[idx]
-        label_raw = str(label)
+    def _build_label(label_raw: str) -> str:
         display_label = label_map.get(label_raw, label_raw) if label_map else label_raw
         if label_prefix:
             display_label = f"{label_prefix} {display_label}"
@@ -229,6 +228,14 @@ def _plot_km_multi(ax, km_map: dict[str, pd.DataFrame], subtitle: str,
             count = group_counts.get(label_raw)
             if count is not None:
                 display_label = f"{display_label} (n={_fmt_int(count)})"
+        return display_label
+
+    for idx, (label, km) in enumerate(km_map.items()):
+        if km is None or km.empty:
+            continue
+        color = colors[idx]
+        label_raw = str(label)
+        display_label = _build_label(label_raw)
         linestyle = line_styles[idx % len(line_styles)] if line_styles else "solid"
         ax.step(
             km["t"],
@@ -240,7 +247,7 @@ def _plot_km_multi(ax, km_map: dict[str, pd.DataFrame], subtitle: str,
             linestyle=linestyle,
         )
         if fill:
-            ax.fill_between(km["t"], 0, km["s"], step="post", alpha=0.15, color=color)
+            ax.fill_between(km["t"], 0, km["s"], step="post", alpha=fill_alpha, color=color)
         if not km["t"].empty:
             t_max_vals.append(float(km["t"].max()))
         if show_last_point:
@@ -266,6 +273,12 @@ def _plot_km_multi(ax, km_map: dict[str, pd.DataFrame], subtitle: str,
                 if t_ref == label_time:
                     ax.text(t_ref, y_ref, f" {_fmt_percent(y_ref)}", fontsize=8, ha="left",
                             va="center", fontweight='600', color=color)
+
+    if legend_only:
+        suffix = f" ({legend_only_suffix})" if legend_only_suffix else ""
+        for label_raw in legend_only:
+            display_label = _build_label(str(label_raw)) + suffix
+            ax.plot([], [], label=display_label, linestyle="dotted", color="#6c757d", linewidth=2.0)
 
     ax.set_ylim(0, 1.02)
     ax.set_xlabel("Meses desde inicio", fontweight='600')
@@ -738,6 +751,7 @@ def save_km_plot(
 def save_km_multi(km_map: dict[str, pd.DataFrame], outpath: str, title: str,
                   max_months: float | None = None, top_n: int | None = None,
                   label_prefix: str = "", fill: bool = True,
+                  fill_alpha: float = 0.15,
                   group_counts: dict[str, int] | None = None,
                   group_stats: dict[str, dict[str, int]] | None = None,
                   label_map: dict[str, str] | None = None,
@@ -745,6 +759,8 @@ def save_km_multi(km_map: dict[str, pd.DataFrame], outpath: str, title: str,
                   milestone_times: list[int] | None = None,
                   milestone_label_time: int | None = None,
                   line_styles: list[str] | None = None,
+                  legend_only: list[str] | None = None,
+                  legend_only_suffix: str | None = None,
                   at_risk: dict[str, list[int]] | None = None,
                   at_risk_times: list[int] | None = None,
                   extra_note: str | None = None):
@@ -768,6 +784,7 @@ def save_km_multi(km_map: dict[str, pd.DataFrame], outpath: str, title: str,
             max_months=max_months,
             label_prefix=label_prefix,
             fill=fill,
+            fill_alpha=fill_alpha,
             group_counts=group_counts,
             group_stats=group_stats,
             label_map=label_map,
@@ -775,6 +792,8 @@ def save_km_multi(km_map: dict[str, pd.DataFrame], outpath: str, title: str,
             milestone_times=milestone_times,
             milestone_label_time=milestone_label_time,
             line_styles=line_styles,
+            legend_only=legend_only,
+            legend_only_suffix=legend_only_suffix,
         )
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)

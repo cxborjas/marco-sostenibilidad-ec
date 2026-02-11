@@ -1395,10 +1395,13 @@ def run_provincia(
                 at_risk_times = None
                 max_months_flag = None
                 line_styles = None
+                legend_only = None
+                legend_only_suffix = None
+                fill_alpha = 0.15
 
                 if flag == "obligado_3cat":
-                    title = f"KM por Obligación (Sí vs No) — {prov_output}"
-                    fill = False
+                    title = f"Supervivencia por Obligación (Sí vs No) — {prov_output}"
+                    fill = True
                     show_last_point = False
                     max_months_flag = window_max_months
                     line_styles = ["solid", "dashed"]
@@ -1406,13 +1409,12 @@ def run_provincia(
                     group_stats = {}
                     for _, row in tab_flag.iterrows():
                         grp = str(row.get("group"))
-                        if grp in km_flag:
-                            n = row.get("group_n")
-                            ev = row.get("group_events_n")
-                            if pd.notna(n) and pd.notna(ev):
-                                n_i = int(n)
-                                ev_i = int(ev)
-                                group_stats[grp] = {"n": n_i, "events": ev_i, "censored": max(n_i - ev_i, 0)}
+                        n = row.get("group_n")
+                        ev = row.get("group_events_n")
+                        if pd.notna(n) and pd.notna(ev):
+                            n_i = int(n)
+                            ev_i = int(ev)
+                            group_stats[grp] = {"n": n_i, "events": ev_i, "censored": max(n_i - ev_i, 0)}
 
                     def _map_obligado_label(value: str) -> str:
                         v = str(value).strip().upper()
@@ -1424,7 +1426,11 @@ def run_provincia(
                             return "No informado"
                         return str(value)
 
-                    label_map = {g: _map_obligado_label(g) for g in km_flag.keys()}
+                    label_keys = set(km_flag.keys()) | set(group_stats.keys()) | {"No"}
+                    label_map = {g: _map_obligado_label(g) for g in label_keys}
+
+                    if "No" not in group_stats:
+                        group_stats["No"] = {"n": 0, "events": 0, "censored": 0}
 
                     included_groups = list(km_flag.keys())
                     logrank_note = None
@@ -1467,6 +1473,9 @@ def run_provincia(
 
                     extra_parts = [window_note, logrank_note, milestone_note]
                     extra_note = " ".join([p for p in extra_parts if p])
+                    legend_only = [g for g in group_stats.keys() if g not in km_flag]
+                    legend_only_suffix = "sin curva"
+                    fill_alpha = 0.08
 
                 save_km_multi(
                     km_flag,
@@ -1474,12 +1483,15 @@ def run_provincia(
                     title,
                     max_months=max_months_flag,
                     fill=fill,
+                    fill_alpha=fill_alpha,
                     group_stats=group_stats,
                     label_map=label_map,
                     show_last_point=show_last_point,
                     milestone_times=milestone_times,
                     milestone_label_time=milestone_label_time,
                     line_styles=line_styles,
+                    legend_only=legend_only,
+                    legend_only_suffix=legend_only_suffix,
                     at_risk=at_risk,
                     at_risk_times=at_risk_times,
                     extra_note=extra_note,
