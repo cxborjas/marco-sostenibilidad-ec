@@ -453,41 +453,131 @@ def save_bar_cohortes(coh: pd.DataFrame, outpath: str, title: str) -> None:
     plt.close(fig)
 
 def save_hist_duracion_cierres(ruc: pd.DataFrame, outpath: str, title: str, max_months: int | None = None):
-    fig, ax = plt.subplots(figsize=(9, 4.8))
+    import numpy as np
+    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+
+    fig, ax = plt.subplots(figsize=(11, 6.5))
+    fig.patch.set_facecolor('white')
     df = ruc[(ruc["event"] == 1)].dropna(subset=["duration_months"]).copy()
     if df.empty:
         ax.text(0.5, 0.5, "Sin cierres observados", ha="center", va="center")
-    else:
-        x = df["duration_months"].astype("int64")
-        if max_months is not None:
-            x = x[x <= max_months]
-        n = int(len(x))
-        if n >= 200:
-            bin_width = 6
-        elif n >= 80:
-            bin_width = 12
-        else:
-            bin_width = 24
-        max_x = max_months if max_months is not None else (int(x.max()) if n else 0)
-        bins = list(range(0, max_x + bin_width, bin_width)) or [0, bin_width]
-        ax.hist(x, bins=bins, color="#1f77b4", alpha=0.85)
-        for ref in [12, 24, 60, 120]:
-            if ref <= max_x:
-                ax.axvline(ref, linestyle="--", color="#555555", linewidth=1)
-        ax.set_xlabel("Duración (meses) — sociedades cerradas")
-        ax.set_ylabel("Frecuencia")
-        note_parts = [
-            f"Cierres observados: {n:,}.",
-            f"Bin ancho: {bin_width} meses.",
-            "Solo eventos (event=1).",
-        ]
-        if max_months is not None:
-            note_parts.append(f"Eje X limitado a {max_months} meses (ventana de análisis).")
-        if n < 50:
-            note_parts.append("Interpretar con prudencia por bajo n.")
-        fig.text(0.01, 0.01, " ".join(note_parts), fontsize=7, ha="left", color='#718096')
-    ax.set_title(title, fontweight='bold', color='#2d3748')
-    fig.tight_layout(rect=[0, 0.05, 1, 1])
+        ax.set_title(title, fontweight='bold', color='#2d3748')
+        fig.tight_layout()
+        fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close(fig)
+        return
+
+    x = df["duration_months"].astype("int64")
+    if max_months is not None:
+        x = x[x <= max_months]
+    n = int(len(x))
+    if n == 0:
+        ax.text(0.5, 0.5, "Sin cierres en la ventana", ha="center", va="center")
+        ax.set_title(title, fontweight='bold', color='#2d3748')
+        fig.tight_layout()
+        fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white')
+        plt.close(fig)
+        return
+
+    # Binning a 12 meses (1 año)
+    bin_width = 12
+    max_x = max_months if max_months is not None else int(x.max())
+    bins = list(range(0, max_x + bin_width, bin_width)) or [0, bin_width]
+    counts_hist, bin_edges, patches = ax.hist(
+        x, bins=bins, color=COLOR_PALETTE[0], alpha=0.8, edgecolor='white', linewidth=0.8,
+    )
+
+    # Estadísticos
+    x_arr = x.values
+    mean_v = float(np.mean(x_arr))
+    median_v = float(np.median(x_arr))
+    p25_v = float(np.percentile(x_arr, 25))
+    p75_v = float(np.percentile(x_arr, 75))
+
+    stat_lines = [
+        (p25_v, "P25", "#43e97b", "dashdot"),
+        (median_v, "Mediana", COLOR_PALETTE[8], "solid"),
+        (mean_v, "Media", COLOR_PALETTE[2], "dashed"),
+        (p75_v, "P75", "#fa709a", "dashdot"),
+    ]
+    ymax = float(max(counts_hist)) if len(counts_hist) else 1
+    for val, label, color, ls in stat_lines:
+        if val <= max_x:
+            ax.axvline(val, linestyle=ls, color=color, linewidth=2, alpha=0.85)
+            ax.text(
+                val, ymax * 0.97, f" {label}: {int(round(val))}m ",
+                fontsize=7.5, fontweight='700', color=color, va="top", ha="left",
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor=color, alpha=0.85),
+            )
+
+    # Líneas de referencia temporal (1, 2, 5, 10 años)
+    for ref, yr_label in [(12, "1a"), (24, "2a"), (60, "5a"), (120, "10a")]:
+        if ref <= max_x:
+            ax.axvline(ref, linestyle=":", color="#adb5bd", linewidth=1, alpha=0.7)
+            ax.text(ref, ymax * 0.02, yr_label, fontsize=7, ha="center", va="bottom", color="#868e96")
+
+    # Etiquetas en barras (solo las que superen umbral)
+    threshold = max(ymax * 0.05, 1)
+    for count_val, left_edge, right_edge in zip(counts_hist, bin_edges[:-1], bin_edges[1:]):
+        if count_val >= threshold:
+            pct = count_val / n * 100
+            mid = (left_edge + right_edge) / 2
+            ax.text(mid, count_val, f"{int(count_val)}\n({pct:.0f}%)",
+                    ha="center", va="bottom", fontsize=6.5, fontweight='600', color='#495057')
+
+    # CDF acumulada en eje secundario
+    ax2 = ax.twinx()
+    sorted_x = np.sort(x_arr)
+    cdf_y = np.arange(1, len(sorted_x) + 1) / len(sorted_x)
+    ax2.plot(sorted_x, cdf_y, color='#e67700', linewidth=2, alpha=0.8, label="% acumulado")
+    ax2.set_ylabel("% acumulado de cierres", fontweight='600', color='#e67700')
+    ax2.set_ylim(0, 1.05)
+    ax2.yaxis.set_major_formatter(mpl.ticker.PercentFormatter(xmax=1.0))
+    ax2.tick_params(axis='y', colors='#e67700')
+    ax2.spines['right'].set_color('#e67700')
+    ax2.spines['top'].set_visible(False)
+
+    # Inset zoom 0-60 meses
+    zoom_max = min(60, max_x)
+    x_zoom = x[x <= zoom_max]
+    if len(x_zoom) >= 5:
+        ax_inset = inset_axes(ax, width="35%", height="40%", loc="upper right",
+                              bbox_to_anchor=(0, -0.02, 0.92, 1.0), bbox_transform=ax.transAxes)
+        zoom_bins = list(range(0, zoom_max + bin_width, bin_width))
+        ax_inset.hist(x_zoom, bins=zoom_bins, color=COLOR_PALETTE[0], alpha=0.75, edgecolor='white', linewidth=0.5)
+        ax_inset.set_title("Zoom 0\u201360m", fontsize=7.5, fontweight='600', color='#495057')
+        ax_inset.tick_params(labelsize=6.5)
+        ax_inset.set_xlim(0, zoom_max)
+        for ref in [12, 24]:
+            ax_inset.axvline(ref, linestyle=":", color="#adb5bd", linewidth=0.8)
+        pct_60 = float((x_arr <= zoom_max).sum()) / n * 100
+        ax_inset.text(0.97, 0.95, f"{pct_60:.0f}% cierres\n\u2264 {zoom_max}m",
+                      transform=ax_inset.transAxes, fontsize=6.5, ha="right", va="top",
+                      fontweight='600', color='#495057',
+                      bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8))
+        ax_inset.patch.set_alpha(0.9)
+
+    # Ejes y título
+    ax.set_xlim(0, max_x)
+    ax.set_xlabel("Duración (meses) \u2014 sociedades cerradas", fontweight='600')
+    ax.set_ylabel("Frecuencia", fontweight='600')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.set_title(title, fontweight='bold', color='#2d3748', pad=10)
+    ax.text(0.5, 1.01, f"Solo cierres observados (n={n:,}), bins={bin_width} meses, ventana 0\u2013{max_x}",
+            transform=ax.transAxes, fontsize=8, ha="center", va="bottom", color='#868e96')
+
+    # Nota al pie
+    note = (
+        f"L\u00edneas verticales: P25={int(round(p25_v))}m, Mediana={int(round(median_v))}m, "
+        f"Media={int(round(mean_v))}m, P75={int(round(p75_v))}m. "
+        f"L\u00edneas punteadas grises: 1, 2, 5, 10 a\u00f1os. Curva naranja: CDF acumulada."
+    )
+    if n < 50:
+        note += " Interpretar con prudencia por bajo n."
+    fig.text(0.01, 0.005, note, fontsize=6.5, ha="left", color='#718096')
+
+    fig.tight_layout(rect=[0, 0.04, 1, 0.97])
     fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white')
     plt.close(fig)
 
