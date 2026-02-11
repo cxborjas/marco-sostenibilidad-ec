@@ -454,7 +454,6 @@ def save_bar_cohortes(coh: pd.DataFrame, outpath: str, title: str) -> None:
 
 def save_hist_duracion_cierres(ruc: pd.DataFrame, outpath: str, title: str, max_months: int | None = None):
     import numpy as np
-    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 
     fig, ax = plt.subplots(figsize=(11, 6.5))
     fig.patch.set_facecolor('white')
@@ -537,25 +536,18 @@ def save_hist_duracion_cierres(ruc: pd.DataFrame, outpath: str, title: str, max_
     ax2.spines['right'].set_color('#e67700')
     ax2.spines['top'].set_visible(False)
 
-    # Inset zoom 0-60 meses
-    zoom_max = min(60, max_x)
-    x_zoom = x[x <= zoom_max]
-    if len(x_zoom) >= 5:
-        ax_inset = inset_axes(ax, width="35%", height="40%", loc="upper right",
-                              bbox_to_anchor=(0, -0.02, 0.92, 1.0), bbox_transform=ax.transAxes)
-        zoom_bins = list(range(0, zoom_max + bin_width, bin_width))
-        ax_inset.hist(x_zoom, bins=zoom_bins, color=COLOR_PALETTE[0], alpha=0.75, edgecolor='white', linewidth=0.5)
-        ax_inset.set_title("Zoom 0\u201360m", fontsize=7.5, fontweight='600', color='#495057')
-        ax_inset.tick_params(labelsize=6.5)
-        ax_inset.set_xlim(0, zoom_max)
-        for ref in [12, 24]:
-            ax_inset.axvline(ref, linestyle=":", color="#adb5bd", linewidth=0.8)
-        pct_60 = float((x_arr <= zoom_max).sum()) / n * 100
-        ax_inset.text(0.97, 0.95, f"{pct_60:.0f}% cierres\n\u2264 {zoom_max}m",
-                      transform=ax_inset.transAxes, fontsize=6.5, ha="right", va="top",
-                      fontweight='600', color='#495057',
-                      bbox=dict(boxstyle='round,pad=0.2', facecolor='white', alpha=0.8))
-        ax_inset.patch.set_alpha(0.9)
+    # Anotación sobre la CDF: % de cierres antes de 24m y 60m
+    for ref_m in [24, 60]:
+        if ref_m <= max_x and len(sorted_x):
+            pct_ref = float((x_arr <= ref_m).sum()) / n
+            ax2.annotate(
+                f"{pct_ref:.0%} \u2264 {ref_m}m",
+                xy=(ref_m, pct_ref), xycoords="data",
+                xytext=(12, 6), textcoords="offset points",
+                fontsize=7.5, fontweight='700', color='#e67700',
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='#e67700', alpha=0.85),
+                arrowprops=dict(arrowstyle='->', color='#e67700', lw=1.2),
+            )
 
     # Ejes y título
     ax.set_xlim(0, max_x)
