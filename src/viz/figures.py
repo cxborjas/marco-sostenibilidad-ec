@@ -379,8 +379,8 @@ def save_bar_actividades(act: pd.DataFrame, outpath: str, title: str):
         data.get("share"),
         strict=False,
     )):
-        # Nombre de actividad dentro de la barra
-        act_label = _trim_text(f"{ciiu} - {actividad}", max_len=50)
+        # Nombre de actividad dentro de la barra (sin código, ya está en el eje Y)
+        act_label = _trim_text(actividad, max_len=50)
         bar_w = bar.get_width()
         if bar_w > xmax * 0.25:
             ax.text(bar_w * 0.02, i, f" {act_label}", va="center", ha="left",
