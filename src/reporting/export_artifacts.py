@@ -12,6 +12,8 @@ import hashlib
 import os
 import re
 import unicodedata
+import gzip
+import tempfile
 from urllib.parse import urlencode
 from urllib.request import urlopen
 import pandas as pd
@@ -218,6 +220,30 @@ def _ensure_parroquias_geojson_for_canton(province: str, canton: str, out_path: 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(geo, ensure_ascii=False), encoding="utf-8")
     return True
+
+
+def _resolve_geojson_runtime_path(path: Path, temp_dir: Path) -> Path:
+    """
+    Return a usable .geojson path, transparently expanding .geojson.gz into temp_dir.
+    """
+    if path.exists():
+        return path
+
+    gz_path = path.with_suffix(path.suffix + ".gz")
+    if not gz_path.exists():
+        return path
+
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    out_path = temp_dir / path.name
+    if out_path.exists():
+        return out_path
+
+    try:
+        with gzip.open(gz_path, "rb") as src, open(out_path, "wb") as dst:
+            shutil.copyfileobj(src, dst)
+    except Exception:
+        return path
+    return out_path
 
 
 def _running_in_notebook() -> bool:
@@ -2331,6 +2357,8 @@ def run_provincia(
         geo_path = geo_base / prov_folder / "parroquias" / f"{canton_slug}.geojson"
         if canton_filter and not geo_path.exists():
             _ensure_parroquias_geojson_for_canton(prov_filter, canton_filter, geo_path)
+        if not geo_path.exists():
+            geo_path = geo_base / "ECUADOR_parroquias.geojson"
     else:
         geo_name = f"{prov_folder.lower()}_cantones.geojson"
         geo_path = geo_base / prov_folder / geo_name
@@ -2340,20 +2368,23 @@ def run_provincia(
         if not geo_path.exists():
             geo_path = geo_base / "ECUADOR.geojson"
 
-    if heatmap_canton_path.exists() and geo_path.exists():
-        save_heatmap_cantones_geo(
-            str(heatmap_canton_path),
-            str(geo_path),
-            str(heatmap_out),
-            heatmap_title,
-            province=prov_filter,
-            geo_level=heatmap_geo_level,
-        )
-    else:
-        save_heatmap_placeholder(
-            str(heatmap_out),
-            heatmap_title,
-        )
+    with tempfile.TemporaryDirectory(prefix="sri_geo_") as tmp_geo_dir:
+        runtime_geo_path = _resolve_geojson_runtime_path(geo_path, Path(tmp_geo_dir))
+        if heatmap_canton_path.exists() and runtime_geo_path.exists():
+            save_heatmap_cantones_geo(
+                str(heatmap_canton_path),
+                str(runtime_geo_path),
+                str(heatmap_out),
+                heatmap_title,
+                province=prov_filter,
+                geo_level=heatmap_geo_level,
+                canton=canton_filter,
+            )
+        else:
+            save_heatmap_placeholder(
+                str(heatmap_out),
+                heatmap_title,
+            )
     legacy_heatmap_fig = out_base / "figures" / "heatmap_canton.png"
     if legacy_heatmap_fig != heatmap_out and legacy_heatmap_fig.exists():
         try:

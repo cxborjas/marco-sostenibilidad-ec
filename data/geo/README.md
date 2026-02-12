@@ -9,10 +9,12 @@ Estructura organizada por provincia:
 - **PROVINCIA/cantones/**: carpeta con geometrias individuales de cada canton.
 - **PROVINCIA/parroquias/CANTON.geojson**: parroquias del canton (descarga/cache on-demand para heatmaps parroquiales).
 - **ECUADOR.geojson**: geometria nacional completa (24 provincias).
+- **ECUADOR_parroquias.geojson.gz**: capa nacional de parroquias comprimida (se descomprime en temporal durante ejecucion).
 
 ### Uso recomendado:
 - Para **heatmaps cantonales**: usar `provincia_cantones.geojson` (contiene todos los cantones como features separados)
 - Para **heatmaps parroquiales (modo canton)**: usar `PROVINCIA/parroquias/CANTON.geojson`
+- Si no existe el shape parroquial del canton, el pipeline usa `ECUADOR_parroquias.geojson.gz` como fallback y filtra por provincia/canton.
 - Para **mapas de provincia completa**: usar `provincia.geojson` (geometria unida)
 - Para **cantones individuales**: usar archivos en `cantones/`
 

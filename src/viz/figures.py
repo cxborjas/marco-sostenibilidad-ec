@@ -1072,6 +1072,7 @@ def save_heatmap_cantones_geo(
     title: str,
     province: str | None = None,
     geo_level: str = "canton",
+    canton: str | None = None,
 ) -> None:
     try:
         import geopandas as gpd
@@ -1139,6 +1140,13 @@ def save_heatmap_cantones_geo(
         gdf_prov = gdf_prov.str.normalize('NFKD').str.encode('ascii', 'ignore').str.decode('ascii')
         gdf_prov = gdf_prov.str.split().str.join(' ')
         gdf = gdf[gdf_prov == prov_norm].copy()
+
+    if join_col == "parroquia" and canton and "DPA_DESCAN" in gdf.columns:
+        canton_norm = _normalize_geo_name(canton)
+        gdf_canton = gdf["DPA_DESCAN"].str.strip().str.upper()
+        gdf_canton = gdf_canton.str.normalize('NFKD').str.encode('ascii', 'ignore').str.decode('ascii')
+        gdf_canton = gdf_canton.str.split().str.join(' ')
+        gdf = gdf[gdf_canton == canton_norm].copy()
 
     # Usar operaciones vectorizadas
     gdf_join = gdf[name_col].str.strip().str.upper()
