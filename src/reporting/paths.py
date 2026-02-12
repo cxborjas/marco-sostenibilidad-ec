@@ -47,6 +47,10 @@ def number_outputs(out_base: Path) -> None:
         "comparativa_especial_3cat.csv": "T12",
         "executive_kpis.csv": "T13",
         "heatmap_canton.csv": "T14",
+        "cohortes.csv": "T15",
+        "km_flags.csv": "T16",
+        "metrics_dashboard.csv": "T17",
+        "qc_dashboard.csv": "T18",
     }
     
     figures_map = {
@@ -65,6 +69,9 @@ def number_outputs(out_base: Path) -> None:
         "executive_kpis.png": "F13",
         "heatmap_canton.png": "F14",
         "cohortes.png": "F15",
+        "km_flags.png": "F16",
+        "metrics_dashboard.png": "F17",
+        "qc_dashboard.png": "F18",
     }
     
     tables_dir = out_base / "tables"

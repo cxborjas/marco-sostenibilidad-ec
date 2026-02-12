@@ -186,11 +186,24 @@ def _is_finite_number(value) -> bool:
 
 def _render_table(ax, rows: list[tuple[str, str]], title: str) -> None:
     ax.axis("off")
-    ax.set_title(title, fontsize=12, fontweight="bold", pad=10, color='#2d3748')
-    table = ax.table(cellText=rows, colLabels=["Indicador", "Valor"], loc="center", cellLoc='left')
+    ax.set_title(title, fontsize=12, fontweight="bold", pad=16, color='#2d3748')
+    n_rows = len(rows) + 1
+    if n_rows >= 11:
+        bbox = [0.0, 0.0, 1.0, 0.82]
+        row_scale = 1.2
+    else:
+        bbox = [0.0, 0.0, 1.0, 0.9]
+        row_scale = 1.5
+    table = ax.table(
+        cellText=rows,
+        colLabels=["Indicador", "Valor"],
+        loc="center",
+        cellLoc='left',
+        bbox=bbox,
+    )
     table.auto_set_font_size(False)
     table.set_fontsize(9)
-    table.scale(1, 1.5)
+    table.scale(1, row_scale)
     
     # Estilo de encabezado
     for i in range(2):
@@ -212,6 +225,25 @@ def _render_table(ax, rows: list[tuple[str, str]], title: str) -> None:
                 cell.set_text_props(weight='600', fontsize=9)
             else:
                 cell.set_text_props(fontsize=9, color='#4a5568')
+
+
+def _pretty_label(raw: str) -> str:
+    if raw is None:
+        return "N/A"
+    text = str(raw).replace("_", " ").strip()
+    if not text:
+        return "N/A"
+    acronyms = {"ruc", "sri", "iess", "iva"}
+    words = []
+    for w in text.split():
+        lw = w.lower()
+        if lw in acronyms:
+            words.append(lw.upper())
+        elif w.isupper() and len(w) <= 4:
+            words.append(w)
+        else:
+            words.append(w.capitalize())
+    return " ".join(words)
 
 
 def _plot_km_multi(ax, km_map: dict[str, pd.DataFrame], subtitle: str,
@@ -1488,11 +1520,19 @@ def save_executive_kpi_dashboard(
 
 
 def save_qc_dashboard(qc_raw: dict, qc_ruc: dict, outpath: str, title: str, qc_extra: dict | None = None) -> None:
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    fig = plt.figure(figsize=(14, 10))
     fig.patch.set_facecolor('white')
-    
+    gs = fig.add_gridspec(3, 2, height_ratios=[0.7, 1, 1], hspace=0.35, wspace=0.25)
+    sem_ax = fig.add_subplot(gs[0, :])
+    axes = [
+        fig.add_subplot(gs[1, 0]),
+        fig.add_subplot(gs[1, 1]),
+        fig.add_subplot(gs[2, 0]),
+        fig.add_subplot(gs[2, 1]),
+    ]
+
     # Agregar título principal con estilo
-    fig.suptitle(title, fontsize=16, fontweight='bold', color='#2d3748', y=0.98)
+    fig.suptitle(title, fontsize=16, fontweight='bold', color='#2d3748', y=0.97)
 
     raw_rows = _fmt_int(qc_raw.get("raw_rows"))
     unique_ruc = _fmt_int(qc_raw.get("unique_ruc"))
@@ -1502,13 +1542,14 @@ def save_qc_dashboard(qc_raw: dict, qc_ruc: dict, outpath: str, title: str, qc_e
     ]
 
     domains = qc_raw.get("domains", {}) or {}
-    domains_rows = [
-        ("CLASE_CONTRIBUYENTE GEN/RMP/SIM", _fmt_percent(domains.get("CLASE_CONTRIBUYENTE_in_GEN_RMP_SIM_share"))),
-        ("ESTADO_CONTRIBUYENTE ACTIVO/PASIVO/SUSP", _fmt_percent(domains.get("ESTADO_CONTRIBUYENTE_in_ACTIVO_PASIVO_SUSPENDIDO_share"))),
-        ("ESTADO_ESTABLECIMIENTO ABI/CER", _fmt_percent(domains.get("ESTADO_ESTABLECIMIENTO_in_ABI_CER_share"))),
-        ("TIPO_CONTRIBUYENTE PERSONA/SOCIEDAD", _fmt_percent(domains.get("TIPO_CONTRIBUYENTE_in_PERSONA_SOCIEDAD_share"))),
-        ("CODIGO_JURISDICCION no vacío", _fmt_percent(domains.get("CODIGO_JURISDICCION_non_empty_share"))),
-    ]
+    domain_labels = {
+        "CLASE_CONTRIBUYENTE_in_GEN_RMP_SIM_share": "Clase contribuyente (GEN/RMP/SIM)",
+        "ESTADO_CONTRIBUYENTE_in_ACTIVO_PASIVO_SUSPENDIDO_share": "Estado contribuyente (Activo/Pasivo/Suspendido)",
+        "ESTADO_ESTABLECIMIENTO_in_ABI_CER_share": "Estado establecimiento (ABI/CER)",
+        "TIPO_CONTRIBUYENTE_in_PERSONA_SOCIEDAD_share": "Tipo contribuyente (Persona/Sociedad)",
+        "CODIGO_JURISDICCION_non_empty_share": "Codigo jurisdiccion no vacio",
+    }
+    domains_rows = [(label, _fmt_percent(domains.get(key))) for key, label in domain_labels.items()]
 
     ruc_rows = _fmt_int(qc_ruc.get("ruc_rows"))
     ruc_rows_table = [
@@ -1536,19 +1577,102 @@ def save_qc_dashboard(qc_raw: dict, qc_ruc: dict, outpath: str, title: str, qc_e
 
     missing = qc_raw.get("missingness", {}) or {}
     top_missing = sorted(missing.items(), key=lambda item: item[1], reverse=True)[:8]
-    missing_rows = [(col, _fmt_percent(val)) for col, val in top_missing]
+    missing_rows = [(_pretty_label(col), _fmt_percent(val)) for col, val in top_missing]
     if not missing_rows:
         missing_rows = [("Sin datos", "N/A")]
 
-    _render_table(axes[0, 0], raw_rows_table, "QC raw")
-    _render_table(axes[0, 1], domains_rows, "Dominios esperados")
-    if extra_rows:
-        _render_table(axes[1, 0], ruc_rows_table + extra_rows, "QC RUC + contexto")
-    else:
-        _render_table(axes[1, 0], ruc_rows_table, "QC RUC")
-    _render_table(axes[1, 1], missing_rows, "Top faltantes")
+    # Semáforo QC
+    sem_ax.set_axis_off()
+    sem_ax.set_xlim(0, 1)
+    sem_ax.set_ylim(0, 1)
+    sem_ax.text(0.01, 0.92, "Semáforo QC", fontsize=11, fontweight="bold", color="#2d3748", ha="left")
 
-    fig.tight_layout(rect=[0, 0, 1, 0.97])
+    domains = qc_raw.get("domains", {}) or {}
+    domain_keys = [
+        "CLASE_CONTRIBUYENTE_in_GEN_RMP_SIM_share",
+        "ESTADO_CONTRIBUYENTE_in_ACTIVO_PASIVO_SUSPENDIDO_share",
+        "ESTADO_ESTABLECIMIENTO_in_ABI_CER_share",
+        "TIPO_CONTRIBUYENTE_in_PERSONA_SOCIEDAD_share",
+        "CODIGO_JURISDICCION_non_empty_share",
+    ]
+    domain_vals = [
+        float(domains.get(k))
+        for k in domain_keys
+        if isinstance(domains.get(k), (int, float)) and math.isfinite(domains.get(k))
+    ]
+    domains_min = min(domain_vals) if domain_vals else float("nan")
+
+    suspendido_sin_fecha = int((qc_ruc.get("state_vs_dates_audit", {}) or {}).get("suspendido_without_suspension_date_n") or 0)
+    activo_con_cierre = int((qc_ruc.get("state_vs_dates_audit", {}) or {}).get("activo_with_terminal_suspension_n") or 0)
+    negative_n = int(qc_ruc.get("negative_durations_n") or 0)
+    ruc_rows = int(qc_ruc.get("ruc_rows") or 0)
+    negative_share = (negative_n / ruc_rows) if ruc_rows else float("nan")
+
+    multi_share = float("nan")
+    if qc_extra:
+        multi_share = float((qc_extra.get("multi_province", {}) or {}).get("ruc_multi_province_share", float("nan")))
+
+    def _status_color(kind: str, value: float | int | None) -> str:
+        if value is None or not math.isfinite(float(value)):
+            return "#9ca3af"
+        v = float(value)
+        if kind == "domains":
+            if v >= 0.99:
+                return "#22c55e"
+            if v >= 0.95:
+                return "#f59e0b"
+            return "#ef4444"
+        if kind == "suspendido":
+            if v == 0:
+                return "#22c55e"
+            if v <= 10:
+                return "#f59e0b"
+            return "#ef4444"
+        if kind == "activo_cierre":
+            if v <= 5:
+                return "#22c55e"
+            if v <= 20:
+                return "#f59e0b"
+            return "#ef4444"
+        if kind == "neg_share":
+            if v <= 0.01:
+                return "#22c55e"
+            if v <= 0.05:
+                return "#f59e0b"
+            return "#ef4444"
+        if kind == "multi_share":
+            if v <= 0.1:
+                return "#22c55e"
+            if v <= 0.25:
+                return "#f59e0b"
+            return "#ef4444"
+        return "#9ca3af"
+
+    sem_items = [
+        ("Dominios esperados (mín.)", _fmt_percent(domains_min), _status_color("domains", domains_min)),
+        ("Suspendido sin fecha", _fmt_int(suspendido_sin_fecha), _status_color("suspendido", suspendido_sin_fecha)),
+        ("Activo con cierre", _fmt_int(activo_con_cierre), _status_color("activo_cierre", activo_con_cierre)),
+        ("Duraciones negativas", _fmt_percent(negative_share), _status_color("neg_share", negative_share)),
+        ("Multi-prov", _fmt_percent(multi_share), _status_color("multi_share", multi_share)),
+    ]
+    n_items = len(sem_items)
+    for idx, (label, value, color) in enumerate(sem_items):
+        x = (idx + 0.5) / n_items
+        sem_ax.add_patch(
+            mpl.patches.Circle((x, 0.58), 0.035, color=color, alpha=0.95, transform=sem_ax.transAxes)
+        )
+        sem_ax.text(x, 0.72, label, ha="center", va="center", fontsize=9, color="#4b5563")
+        sem_ax.text(x, 0.48, value, ha="center", va="center", fontsize=10, fontweight="bold", color="#1f2937")
+
+    _render_table(axes[0], raw_rows_table, "QC base (raw)")
+    _render_table(axes[1], domains_rows, "Dominios esperados")
+    if extra_rows:
+        _render_table(axes[2], ruc_rows_table + extra_rows, "QC RUC + contexto")
+    else:
+        _render_table(axes[2], ruc_rows_table, "QC RUC")
+    _render_table(axes[3], missing_rows, "Top faltantes")
+
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
     fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
     plt.close(fig)
 
@@ -1628,7 +1752,7 @@ def save_metrics_dashboard(metrics: dict, outpath: str, title: str) -> None:
         va="top",
     )
     subtitle = f"Provincia {run.get('province', 'N/A')} · Ventana {run.get('window_start_year', 'N/A')}-{run.get('window_end_year', 'N/A')}"
-    ax_cards.text(0.02, 0.885, subtitle, fontsize=9.5, color="#6b7280", ha="left", va="top")
+    ax_cards.text(0.02, 0.86, subtitle, fontsize=9.5, color="#6b7280", ha="left", va="top")
 
     cols = 3
     rows = 2

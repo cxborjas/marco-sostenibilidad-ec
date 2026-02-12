@@ -289,6 +289,10 @@ _NUMBERED_TABLES = {
     "comparativa_especial_3cat.csv": "T12_comparativa_especial_3cat.csv",
     "executive_kpis.csv": "T13_executive_kpis.csv",
     "heatmap_canton.csv": "T14_heatmap_canton.csv",
+    "cohortes.csv": "T15_cohortes.csv",
+    "km_flags.csv": "T16_km_flags.csv",
+    "metrics_dashboard.csv": "T17_metrics_dashboard.csv",
+    "qc_dashboard.csv": "T18_qc_dashboard.csv",
 }
 
 
@@ -308,6 +312,9 @@ _NUMBERED_FIGURES = {
     "executive_kpis.png": "F13_executive_kpis.png",
     "heatmap_canton.png": "F14_heatmap_canton.png",
     "cohortes.png": "F15_cohortes.png",
+    "km_flags.png": "F16_km_flags.png",
+    "metrics_dashboard.png": "F17_metrics_dashboard.png",
+    "qc_dashboard.png": "F18_qc_dashboard.png",
 }
 
 
@@ -344,6 +351,11 @@ def _number_outputs(out_base: Path) -> None:
         ("11", "comparativa_agente_retencion_3cat.csv", "km_agente_retencion_3cat.png", "Comparativa agente retencion"),
         ("12", "comparativa_especial_3cat.csv", "km_especial_3cat.png", "Comparativa especial"),
         ("13", "executive_kpis.csv", "executive_kpis.png", "Resumen ejecutivo (tabla) / Dashboard ejecutivo (figura)"),
+        ("14", "heatmap_canton.csv", "heatmap_canton.png", "Heatmap cantonal"),
+        ("15", "cohortes.csv", "cohortes.png", "Cohortes quinquenales"),
+        ("16", "km_flags.csv", "km_flags.png", "KM por banderas"),
+        ("17", "metrics_dashboard.csv", "metrics_dashboard.png", "Metrics dashboard"),
+        ("18", "qc_dashboard.csv", "qc_dashboard.png", "QC dashboard"),
     ]
 
     rows = []
@@ -632,7 +644,7 @@ def _build_html_report(out_base: Path) -> Path:
             None,
             [
                 _render_fig_block(_f("cohortes.png"), "Cohortes quinquenales"),
-                _render_table_block("cohortes.csv", "Tabla cohortes"),
+                _render_table_block(_t("cohortes.csv"), "Tabla cohortes"),
             ],
         )
     )
@@ -693,7 +705,8 @@ def _build_html_report(out_base: Path) -> Path:
                 _render_table_block(_t("comparativa_agente_retencion_3cat.csv"), "Comparativa agente de retencion"),
                 _render_fig_block(_f("km_especial_3cat.png"), "KM por especial"),
                 _render_table_block(_t("comparativa_especial_3cat.csv"), "Comparativa especial"),
-                _render_fig_block("km_flags.png", "KM por banderas"),
+                _render_fig_block(_f("km_flags.png"), "KM por banderas"),
+                _render_table_block(_t("km_flags.csv"), "Tabla KM por banderas"),
             ],
         )
     )
@@ -705,7 +718,8 @@ def _build_html_report(out_base: Path) -> Path:
             [
                 _render_fig_block(_f("executive_kpis.png"), "Dashboard ejecutivo"),
                 _render_table_block(_t("executive_kpis.csv"), "Tabla KPIs ejecutivos"),
-                _render_fig_block("metrics_dashboard.png", "Dashboard metrics"),
+                _render_fig_block(_f("metrics_dashboard.png"), "Dashboard metrics"),
+                _render_table_block(_t("metrics_dashboard.csv"), "Tabla metrics dashboard"),
             ],
         )
     )
@@ -715,10 +729,11 @@ def _build_html_report(out_base: Path) -> Path:
         filter(
             None,
             [
-                _render_fig_block("qc_dashboard.png", "QC dashboard"),
-                _render_table_block("qc_missingness.csv", "QC missingness"),
-                _render_table_block("qc_domains.csv", "QC dominios"),
-                _render_table_block("qc_dates.csv", "QC fechas"),
+                _render_fig_block(_f("qc_dashboard.png"), "QC dashboard"),
+                _render_table_block(_t("qc_dashboard.csv"), "Tabla QC dashboard"),
+                _render_table_block(_t("qc_missingness.csv"), "QC missingness"),
+                _render_table_block(_t("qc_domains.csv"), "QC dominios"),
+                _render_table_block(_t("qc_dates.csv"), "QC fechas"),
             ],
         )
     )
@@ -1194,12 +1209,14 @@ def run_provincia(
         columns=["column", "missing_share"],
     )
     write_csv(qc_missing, out_base / "qc" / "qc_missingness.csv")
+    write_csv(qc_missing, _table_path(out_base, "qc_missingness.csv"))
 
     qc_domains = pd.DataFrame(
         [(k, v) for k, v in (qc1.get("domains", {}) or {}).items()],
         columns=["domain_check", "share"],
     )
     write_csv(qc_domains, out_base / "qc" / "qc_domains.csv")
+    write_csv(qc_domains, _table_path(out_base, "qc_domains.csv"))
 
     qc_dates_rows = []
     for k, v in (qc1.get("invalid_dates", {}) or {}).items():
@@ -1218,6 +1235,59 @@ def run_provincia(
     ))
     qc_dates = pd.DataFrame(qc_dates_rows, columns=["metric", "value"])
     write_csv(qc_dates, out_base / "qc" / "qc_dates.csv")
+    write_csv(qc_dates, _table_path(out_base, "qc_dates.csv"))
+    qc_dash_rows: list[dict[str, object]] = []
+
+    def _add_qc_row(section: str, indicator: str, value: object) -> None:
+        qc_dash_rows.append({"section": section, "indicator": indicator, "value": value})
+
+    _add_qc_row("QC base", "Filas raw", qc1.get("raw_rows"))
+    _add_qc_row("QC base", "RUC unicos", qc1.get("unique_ruc"))
+
+    domain_labels = {
+        "CLASE_CONTRIBUYENTE_in_GEN_RMP_SIM_share": "Clase contribuyente (GEN/RMP/SIM)",
+        "ESTADO_CONTRIBUYENTE_in_ACTIVO_PASIVO_SUSPENDIDO_share": "Estado contribuyente (Activo/Pasivo/Suspendido)",
+        "ESTADO_ESTABLECIMIENTO_in_ABI_CER_share": "Estado establecimiento (ABI/CER)",
+        "TIPO_CONTRIBUYENTE_in_PERSONA_SOCIEDAD_share": "Tipo contribuyente (Persona/Sociedad)",
+        "CODIGO_JURISDICCION_non_empty_share": "Codigo jurisdiccion no vacio",
+    }
+    domains = qc1.get("domains", {}) or {}
+    for key, label in domain_labels.items():
+        _add_qc_row("Dominios esperados", label, domains.get(key))
+
+    _add_qc_row("QC RUC", "RUC en master", qc2.get("ruc_rows"))
+    _add_qc_row("QC RUC", "Eventos", qc2.get("events_n"))
+    _add_qc_row("QC RUC", "Censurados", qc2.get("censored_n"))
+    _add_qc_row("QC RUC", "Duraciones negativas", qc2.get("negative_durations_n"))
+    _add_qc_row("QC RUC", "Suspension + reinicio", qc2.get("suspension_and_restart_n"))
+    _add_qc_row(
+        "QC RUC",
+        "Activo con cierre",
+        (qc2.get("state_vs_dates_audit", {}) or {}).get("activo_with_terminal_suspension_n"),
+    )
+    _add_qc_row(
+        "QC RUC",
+        "Suspendido sin fecha",
+        (qc2.get("state_vs_dates_audit", {}) or {}).get("suspendido_without_suspension_date_n"),
+    )
+
+    _add_qc_row("Contexto", "Estab/RUC media", est_per_ruc.get("mean"))
+    _add_qc_row("Contexto", "Estab/RUC mediana", est_per_ruc.get("median"))
+    _add_qc_row("Contexto", "Estab/RUC p95", est_per_ruc.get("p95"))
+    _add_qc_row("Contexto", "RUC 1 estab", est_per_ruc.get("share_ruc_single_establishment"))
+    _add_qc_row("Contexto", "RUC multi-prov", multi_prov_stats.get("ruc_multi_province_in_province_n"))
+    _add_qc_row("Contexto", "% RUC multi-prov", multi_prov_stats.get("ruc_multi_province_share"))
+
+    missingness = qc1.get("missingness", {}) or {}
+    top_missing = sorted(missingness.items(), key=lambda item: item[1], reverse=True)[:8]
+    if top_missing:
+        for col, val in top_missing:
+            _add_qc_row("Top faltantes", str(col).replace("_", " ").title(), val)
+    else:
+        _add_qc_row("Top faltantes", "Sin datos", None)
+
+    qc_dashboard_table = pd.DataFrame(qc_dash_rows, columns=["section", "indicator", "value"])
+    write_csv(qc_dashboard_table, _table_path(out_base, "qc_dashboard.csv"))
     tracelog.event("out_of_range", "start_date out of range", out_of_range)
     tracelog.event(
         "survival_counts",
@@ -1231,7 +1301,7 @@ def run_provincia(
     save_qc_dashboard(
         qc1,
         qc2,
-        str(out_base / "figures" / "qc_dashboard.png"),
+        str(_figure_path(out_base, "qc_dashboard.png")),
         f"QC resumen — {prov_output}",
         qc_extra={
             "establishments_per_ruc": est_per_ruc,
@@ -1247,7 +1317,14 @@ def run_provincia(
     write_csv(demo, _table_path(out_base, "demografia_anual.csv"))
 
     coh = cohortes(ruc, cfg_g["cohorts_5y"])
-    write_csv(coh, out_base / "tables" / "cohortes.csv")
+    cohortes_path = _table_path(out_base, "cohortes.csv")
+    write_csv(coh, cohortes_path)
+    legacy_cohortes = out_base / "tables" / "cohortes.csv"
+    if legacy_cohortes != cohortes_path and legacy_cohortes.exists():
+        try:
+            legacy_cohortes.unlink()
+        except OSError:
+            pass
     progress.step(f"Demografía ({len(demo)} filas) y cohortes ({len(coh)} filas) listos")
 
     cant = cantones_topN_from_raw(df, ruc_main=ruc, topN=int(cfg_g["topN_cantones"]))
@@ -1426,6 +1503,7 @@ def run_provincia(
         comparativa_figures += 1
 
     km_flags_map: dict[str, dict[str, pd.DataFrame]] = {}
+    km_flags_tables: list[pd.DataFrame] = []
     for flag in ["obligado_3cat", "agente_retencion_3cat", "especial_3cat"]:
         if flag in ruc_cmp.columns:
             tab_flag, km_flag = kpis_by_group(ruc_cmp, flag, critical_bins_months=critical_bins,
@@ -1435,6 +1513,9 @@ def run_provincia(
             if not tab_flag.empty:
                 write_csv(tab_flag, _table_path(out_base, f"comparativa_{flag}.csv"))
                 comparativa_tables += 1
+                tmp_flag = tab_flag.copy()
+                tmp_flag.insert(0, "flag", flag)
+                km_flags_tables.append(tmp_flag)
                 title = f"KM por {flag} — {prov_output}"
                 fill = True
                 extra_note = None
@@ -1742,7 +1823,26 @@ def run_provincia(
             extra_note=extra_note,
         )
         comparativa_figures += 1
-    save_km_flags(km_flags_map, str(out_base / "figures" / "km_flags.png"), f"KM por banderas — {prov_output}")
+    if km_flags_tables:
+        km_flags_table = pd.concat(km_flags_tables, ignore_index=True)
+    else:
+        km_flags_table = pd.DataFrame(columns=[
+            "flag",
+            "group",
+            "group_n",
+            "group_events_n",
+            "group_censored_n",
+            "km_included",
+            "S_12m",
+            "S_24m",
+            "S_60m",
+            "S_120m",
+            "median_survival_months",
+            "early_closure_share_lt_24m",
+            "no_informado_share",
+        ])
+    write_csv(km_flags_table, _table_path(out_base, "km_flags.csv"))
+    save_km_flags(km_flags_map, str(_figure_path(out_base, "km_flags.png")), f"KM por banderas - {prov_output}")
     progress.step(
         f"Comparativas generadas ({comparativa_tables} tablas / {comparativa_figures} figuras)"
     )
@@ -1925,9 +2025,56 @@ def run_provincia(
         },
     }
     write_json(out_base / "metrics.json", metrics)
+    metrics_rows: list[dict[str, object]] = []
+
+    def _add_metric(section: str, indicator: str, value: object) -> None:
+        metrics_rows.append({"section": section, "indicator": indicator, "value": value})
+
+    run_m = metrics.get("run", {}) or {}
+    dem_m = metrics.get("demography", {}) or {}
+    geo_m = metrics.get("geography", {}) or {}
+    sector_m = metrics.get("sector", {}) or {}
+    surv_m = metrics.get("survival", {}) or {}
+    div_m = sector_m.get("diversification", {}) or {}
+    lead_m = sector_m.get("leading_macro_sector", {}) or {}
+    km_m = surv_m.get("km", {}) or {}
+
+    _add_metric("KPI", "Nacimientos", dem_m.get("births_total_2000_2024"))
+    _add_metric("KPI", "Cierres", dem_m.get("closures_terminal_total_2000_2024"))
+    _add_metric("KPI", "Neto", dem_m.get("net_total_2000_2024"))
+    _add_metric("KPI", "Mediana supervivencia (meses)", surv_m.get("median_survival_months"))
+    _add_metric("KPI", "S_60m", surv_m.get("S_60m"))
+    _add_metric("KPI", "S_120m", surv_m.get("S_120m"))
+    _add_metric("KPI", "% cierres <24m", surv_m.get("early_closure_share_lt_24m"))
+
+    _add_metric("Run", "Provincia", run_m.get("province"))
+    _add_metric("Run", "Ventana inicio", run_m.get("window_start_year"))
+    _add_metric("Run", "Ventana fin", run_m.get("window_end_year"))
+    _add_metric("Run", "Censura", run_m.get("censor_date"))
+    _add_metric("Run", "RUC incluidos", km_m.get("n_total"))
+
+    _add_metric("Geografia", "RUC Top3", geo_m.get("top3_concentration_by_ruc_share"))
+    _add_metric("Geografia", "RUC Top5", geo_m.get("top5_concentration_by_ruc_share"))
+    _add_metric("Geografia", "Estab Top3", geo_m.get("top3_concentration_by_establishments_share"))
+    _add_metric("Geografia", "Estab Top5", geo_m.get("top5_concentration_by_establishments_share"))
+
+    _add_metric("Sector", "Macro lider (letra)", lead_m.get("letter"))
+    _add_metric("Sector", "Macro lider (etiqueta)", lead_m.get("label"))
+    _add_metric("Sector", "Macro lider (share)", lead_m.get("share"))
+    _add_metric("Sector", "Top1 macro share", div_m.get("top1_macro_sector_share"))
+    _add_metric("Sector", "HHI macro", div_m.get("hhi_macro_sector"))
+    _add_metric("Sector", "Macros efectivos", div_m.get("effective_macro_sectors"))
+
+    _add_metric("Supervivencia", "S_12m", surv_m.get("S_12m"))
+    _add_metric("Supervivencia", "S_24m", surv_m.get("S_24m"))
+    _add_metric("Supervivencia", "Eventos", km_m.get("events_terminal_closure_n"))
+    _add_metric("Supervivencia", "Censurados", km_m.get("censored_n"))
+
+    metrics_table = pd.DataFrame(metrics_rows, columns=["section", "indicator", "value"])
+    write_csv(metrics_table, _table_path(out_base, "metrics_dashboard.csv"))
     save_metrics_dashboard(
         metrics,
-        str(out_base / "figures" / "metrics_dashboard.png"),
+        str(_figure_path(out_base, "metrics_dashboard.png")),
         f"Metrics resumen — {prov_output}",
     )
 
