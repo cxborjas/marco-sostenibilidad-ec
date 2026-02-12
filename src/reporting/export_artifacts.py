@@ -149,6 +149,8 @@ class _ProgressPrinter:
         self.total = len(stages)
         self.completed = 0
         self.start = perf_counter()
+        self.last_step = self.start
+        self.stage_durations: list[float] = []
 
     def announce(self, province: str):
         print(f"Iniciando pipeline para {province} ({self.total} etapas)...", flush=True)
@@ -158,11 +160,19 @@ class _ProgressPrinter:
 
     def step(self, extra: str | None = None):
         self.completed += 1
-        elapsed = perf_counter() - self.start
+        now = perf_counter()
+        elapsed = now - self.start
+        stage_elapsed = now - self.last_step
+        self.last_step = now
+        if stage_elapsed >= 0:
+            self.stage_durations.append(stage_elapsed)
         pct = (self.completed / self.total) * 100 if self.total else 100.0
         remaining = None
-        if self.completed < self.total and elapsed > 0:
-            remaining = (elapsed / self.completed) * (self.total - self.completed)
+        if self.completed < self.total and self.stage_durations:
+            recent = self.stage_durations[-5:]
+            avg = sum(recent) / len(recent)
+            if avg > 0:
+                remaining = avg * (self.total - self.completed)
         if self.completed - 1 < len(self.stages):
             base = self.stages[self.completed - 1]
         else:
