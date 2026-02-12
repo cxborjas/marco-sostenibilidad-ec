@@ -389,7 +389,8 @@ def save_line_demografia(
         births_peak = demo.loc[demo["births_n"].idxmax()] if demo["births_n"].max() > 0 else None
         closures_peak = demo.loc[demo["closures_terminal_n"].idxmax()] if demo["closures_terminal_n"].max() > 0 else None
 
-    ax.set_xlim(window_start, window_end)
+    # Add horizontal padding so rightmost year/value labels do not touch the canvas edge.
+    ax.set_xlim(window_start - 0.4, window_end + 0.6)
     ax.set_xlabel("Año", fontweight='600')
     ax.set_ylabel("Conteo (RUC)", fontweight='600')
     ax.set_title(title, fontweight='bold', color='#2d3748')
@@ -419,12 +420,12 @@ def save_line_demografia(
     ]
     if isinstance(ruc_valid_start, int):
         note_parts.append(f"RUC con inicio válido: {ruc_valid_start:,}.")
-    fig.text(0.01, 0.01, " ".join(note_parts), fontsize=7, ha="left", color='#718096')
-    fig.tight_layout(rect=[0, 0.04, 1, 1])
-    fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white')
+    fig.text(0.01, 0.015, " ".join(note_parts), fontsize=7, ha="left", color='#718096')
+    fig.subplots_adjust(left=0.08, right=0.98, bottom=0.16, top=0.92)
+    fig.savefig(outpath, dpi=300, facecolor='white')
     plt.close(fig)
 
-def save_bar_cantones(cant: pd.DataFrame, outpath: str, title: str):
+def save_bar_cantones(cant: pd.DataFrame, outpath: str, title: str, geo_label: str = "canton"):
     fig, ax = plt.subplots(figsize=(10, 5.5))
     fig.patch.set_facecolor('white')
     if cant.empty:
@@ -464,7 +465,11 @@ def save_bar_cantones(cant: pd.DataFrame, outpath: str, title: str):
             if _is_finite_number(est_share_sum) and est_share_sum > 0:
                 total_est = int(round(data["establishments_n"].sum() / est_share_sum))
 
-        note_parts = ["Unidad: RUC por cantón principal."]
+        geo_label_norm = (geo_label or "canton").strip().lower()
+        if geo_label_norm == "parroquia":
+            note_parts = ["Unidad: RUC por parroquia principal."]
+        else:
+            note_parts = ["Unidad: RUC por cant?n principal."]
         if total_ruc:
             note_parts.append(f"Denominador RUC: {total_ruc:,}.")
         if total_est:

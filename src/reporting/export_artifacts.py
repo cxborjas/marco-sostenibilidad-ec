@@ -22,7 +22,12 @@ from src.etl.collapse_ruc import collapse_to_ruc
 from src.qc.qc_metrics import qc_raw, qc_ruc_master, establishments_per_ruc_summary
 
 from src.metrics.demografia import demografia_anual, cohortes, cohort_5y_label
-from src.metrics.geografia import cantones_topN_from_raw, concentracion_topk, cantones_share_from_raw
+from src.metrics.geografia import (
+    cantones_topN_from_raw,
+    parroquias_topN_from_raw,
+    concentracion_topk,
+    cantones_share_from_raw,
+)
 from src.metrics.sectorial import macro_sectores, top_actividades, diversificacion_simple
 
 from src.metrics.supervivencia import survival_kpis, kpis_by_group, logrank_test_multi, at_risk_by_group
@@ -1529,10 +1534,22 @@ def run_provincia(
         str(_figure_path(out_base, "cohortes.png")),
         f"Cohortes quinquenales — {display_label}",
     )
+    f02_geo = cant
+    f02_geo_label = "canton"
+    f02_title = f"Cantones top 10 — {display_label}"
+    if canton_filter:
+        parroq = parroquias_topN_from_raw(df, ruc_main=ruc, topN=int(cfg_g["topN_cantones"]))
+        f02_geo = parroq.rename(columns={"parroquia": "canton"}) if not parroq.empty else pd.DataFrame(
+            columns=["canton", "establishments_n", "ruc_n", "establishments_share", "ruc_share"]
+        )
+        f02_geo_label = "parroquia"
+        f02_title = f"Parroquias top 10 — {display_label}"
+
     save_bar_cantones(
-        cant,
+        f02_geo,
         str(_figure_path(out_base, "cantones_top10.png")),
-        f"Cantones top 10 — {display_label}",
+        f02_title,
+        geo_label=f02_geo_label,
     )
     save_bar_macro(
         macro,
