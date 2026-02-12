@@ -33,3 +33,16 @@ def add_canton_topN_bucket(ruc: pd.DataFrame, topN: int = 5) -> pd.DataFrame:
     top = set(counts.head(topN).index.tolist())
     df["canton_bucket"] = c.apply(lambda x: x if x in top else "Resto")
     return df
+
+
+def add_parroquia_topN_bucket(ruc: pd.DataFrame, topN: int = 5) -> pd.DataFrame:
+    df = ruc.copy()
+    if "main_parish" not in df.columns:
+        df["parroquia_bucket"] = "No informado"
+        return df
+
+    p = df["main_parish"].astype("string").fillna("No informado").str.strip()
+    counts = p.value_counts()
+    top = set(counts.head(topN).index.tolist())
+    df["parroquia_bucket"] = p.apply(lambda x: x if x in top else "Resto")
+    return df

@@ -113,3 +113,26 @@ def cantones_share_from_raw(raw_prov: pd.DataFrame) -> pd.DataFrame:
     out["ruc_share"] = out["ruc_n"] / total_ruc
 
     return out.sort_values(["ruc_n", "establishments_n"], ascending=False).reset_index(drop=True)
+
+
+def parroquias_share_from_raw(raw_prov: pd.DataFrame) -> pd.DataFrame:
+    df = raw_prov.copy()
+    if "DESCRIPCION_PARROQUIA_EST" not in df.columns:
+        return pd.DataFrame(
+            columns=["parroquia", "establishments_n", "ruc_n", "establishments_share", "ruc_share"]
+        )
+
+    df["parroquia"] = df["DESCRIPCION_PARROQUIA_EST"].astype("string").fillna("No informado").str.strip()
+    est = df.groupby("parroquia", as_index=False).agg(establishments_n=("parroquia", "size"))
+    ruc = df.groupby("parroquia", as_index=False).agg(ruc_n=("NUMERO_RUC", pd.Series.nunique))
+
+    out = est.merge(ruc, on="parroquia", how="outer").fillna(0)
+    out["establishments_n"] = out["establishments_n"].astype("int64")
+    out["ruc_n"] = out["ruc_n"].astype("int64")
+
+    total_est = int(out["establishments_n"].sum()) or 1
+    total_ruc = int(out["ruc_n"].sum()) or 1
+    out["establishments_share"] = out["establishments_n"] / total_est
+    out["ruc_share"] = out["ruc_n"] / total_ruc
+
+    return out.sort_values(["ruc_n", "establishments_n"], ascending=False).reset_index(drop=True)

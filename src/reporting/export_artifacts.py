@@ -10,6 +10,10 @@ import json
 import yaml
 import hashlib
 import os
+import re
+import unicodedata
+from urllib.parse import urlencode
+from urllib.request import urlopen
 import pandas as pd
 
 from src.utils.io import ensure_dir, read_csv_safely, write_json, write_parquet, write_csv
@@ -27,12 +31,18 @@ from src.metrics.geografia import (
     parroquias_topN_from_raw,
     concentracion_topk,
     cantones_share_from_raw,
+    parroquias_share_from_raw,
 )
 from src.metrics.sectorial import macro_sectores, top_actividades, diversificacion_simple
 
 from src.metrics.supervivencia import survival_kpis, kpis_by_group, logrank_test_multi, at_risk_by_group
 from src.utils.km import survival_at
-from src.metrics.comparativas import add_scale_bucket, add_canton_topN_bucket, SCALE_BUCKET_ORDER
+from src.metrics.comparativas import (
+    add_scale_bucket,
+    add_canton_topN_bucket,
+    add_parroquia_topN_bucket,
+    SCALE_BUCKET_ORDER,
+)
 
 from src.viz.figures import (
     save_line_demografia,
@@ -154,6 +164,60 @@ def _missing_mask(series: pd.Series) -> pd.Series:
     s = series.astype("string").fillna("").str.strip()
     s_upper = s.str.upper()
     return (s == "") | s_upper.isin(["NO INFORMADO", "N/A", "NA"])
+
+
+_ARCGIS_PARROQUIAS_QUERY = (
+    "https://services7.arcgis.com/iFGeGXTAJXnjq0YN/ArcGIS/rest/services/"
+    "Parroquias_del_Ecuador/FeatureServer/0/query"
+)
+
+
+def _normalize_geo_token(value: str | None) -> str:
+    text = "" if value is None else str(value)
+    text = unicodedata.normalize("NFKD", text)
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    text = re.sub(r"[^A-Za-z0-9]+", " ", text.upper())
+    return " ".join(text.split())
+
+
+def _geo_slug(value: str | None) -> str:
+    token = _normalize_geo_token(value)
+    return token.replace(" ", "_")
+
+
+def _arcgis_sql_escape(value: str) -> str:
+    return value.replace("'", "''")
+
+
+def _ensure_parroquias_geojson_for_canton(province: str, canton: str, out_path: Path) -> bool:
+    if out_path.exists():
+        return True
+
+    where = (
+        f"DPA_DESPRO='{_arcgis_sql_escape(str(province).strip().upper())}' "
+        f"AND DPA_DESCAN='{_arcgis_sql_escape(str(canton).strip().upper())}'"
+    )
+    params = {
+        "where": where,
+        "outFields": "*",
+        "returnGeometry": "true",
+        "outSR": "4326",
+        "f": "geojson",
+    }
+    try:
+        with urlopen(f"{_ARCGIS_PARROQUIAS_QUERY}?{urlencode(params)}", timeout=60) as resp:
+            payload = resp.read().decode("utf-8")
+        geo = json.loads(payload)
+    except Exception:
+        return False
+
+    features = geo.get("features", []) if isinstance(geo, dict) else []
+    if not features:
+        return False
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(geo, ensure_ascii=False), encoding="utf-8")
+    return True
 
 
 def _running_in_notebook() -> bool:
@@ -571,6 +635,10 @@ def _build_html_report(out_base: Path, report_label: str | None = None) -> Path:
             metrics_obj = json.loads(metrics_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             metrics_obj = None
+    run_meta = (metrics_obj or {}).get("run", {}) if isinstance(metrics_obj, dict) else {}
+    geo_compare_label = "parroquia" if run_meta.get("canton") else "canton"
+    geo_level_label = "parroquial" if run_meta.get("canton") else "cantonal"
+    geo_top_label = "Parroquias" if run_meta.get("canton") else "Cantones"
 
     def _fmt_pct(value) -> str:
         try:
@@ -741,10 +809,10 @@ def _build_html_report(out_base: Path, report_label: str | None = None) -> Path:
         filter(
             None,
             [
-                _render_fig_block(_f("cantones_top10.png"), "Cantones top 10"),
-                _render_table_block(_t("cantones_top10.csv"), "Tabla cantones top 10"),
-                _render_fig_block(_f("heatmap_canton.png"), "Heatmap cantonal"),
-                _render_table_block(_t("heatmap_canton.csv"), "Tabla heatmap cantonal"),
+                _render_fig_block(_f("cantones_top10.png"), f"{geo_top_label} top 10"),
+                _render_table_block(_t("cantones_top10.csv"), f"Tabla {geo_top_label.lower()} top 10"),
+                _render_fig_block(_f("heatmap_canton.png"), f"Heatmap {geo_level_label}"),
+                _render_table_block(_t("heatmap_canton.csv"), f"Tabla heatmap {geo_level_label}"),
             ],
         )
     )
@@ -782,8 +850,8 @@ def _build_html_report(out_base: Path, report_label: str | None = None) -> Path:
             [
                 _render_fig_block(_f("km_sector.png"), "KM por macro-sector"),
                 _render_table_block(_t("comparativa_sector.csv"), "Comparativa macro-sector"),
-                _render_fig_block(_f("km_canton_topN.png"), "KM por canton"),
-                _render_table_block(_t("comparativa_canton_top5.csv"), "Comparativa canton"),
+                _render_fig_block(_f("km_canton_topN.png"), f"KM por {geo_compare_label}"),
+                _render_table_block(_t("comparativa_canton_top5.csv"), f"Comparativa {geo_compare_label}"),
                 _render_fig_block(_f("km_escala.png"), "KM por escala"),
                 _render_table_block(_t("comparativa_escala.csv"), "Comparativa escala"),
                 _render_fig_block(_f("km_obligado_3cat.png"), "KM por obligado"),
@@ -1448,7 +1516,14 @@ def run_provincia(
     cant = cantones_topN_from_raw(df, ruc_main=ruc, topN=int(cfg_g["topN_cantones"]))
     write_csv(cant, _table_path(out_base, "cantones_top10.csv"))
     geo_conc = concentracion_topk(cant, 5)
-    heatmap_canton = cantones_share_from_raw(df)
+    if canton_filter:
+        heatmap_canton = parroquias_share_from_raw(df)
+        heatmap_geo_level = "parroquia"
+        heatmap_label = "parroquial"
+    else:
+        heatmap_canton = cantones_share_from_raw(df)
+        heatmap_geo_level = "canton"
+        heatmap_label = "cantonal"
     heatmap_canton_path = _table_path(out_base, "heatmap_canton.csv")
     if not heatmap_canton.empty:
         write_csv(heatmap_canton, heatmap_canton_path)
@@ -1458,7 +1533,7 @@ def run_provincia(
                 legacy_heatmap_table.unlink()
             except OSError:
                 pass
-    progress.step(f"Cantones top calculados ({len(cant)} filas) y métricas de concentración listas")
+    progress.step(f"Cantones top calculados ({len(cant)} filas) y m?tricas de concentraci?n {heatmap_label} listas")
 
     macro = macro_sectores(ruc)
     write_csv(macro, _table_path(out_base, "macro_sectores.csv"))
@@ -1592,7 +1667,16 @@ def run_provincia(
     cmp_canton_topN = int(cmp_cfg.get("canton_topN", 5))
 
     ruc_cmp = add_scale_bucket(ruc)
-    ruc_cmp = add_canton_topN_bucket(ruc_cmp, topN=cmp_canton_topN)
+    if canton_filter:
+        ruc_cmp = add_parroquia_topN_bucket(ruc_cmp, topN=cmp_canton_topN)
+        cmp_geo_col = "parroquia_bucket"
+        cmp_geo_title = "parroquia"
+        cmp_geo_label_prefix = "Parroquia"
+    else:
+        ruc_cmp = add_canton_topN_bucket(ruc_cmp, topN=cmp_canton_topN)
+        cmp_geo_col = "canton_bucket"
+        cmp_geo_title = "cantón"
+        cmp_geo_label_prefix = "Cantón"
     critical_bins = cfg_g.get("critical_bins_months", None)
     comparativa_tables = 0
     comparativa_figures = 0
@@ -1615,7 +1699,7 @@ def run_provincia(
         )
         comparativa_figures += 1
 
-    tab_canton, km_canton = kpis_by_group(ruc_cmp, "canton_bucket", critical_bins_months=critical_bins,
+    tab_canton, km_canton = kpis_by_group(ruc_cmp, cmp_geo_col, critical_bins_months=critical_bins,
                                           min_n=max(cmp_min_n // 4, 30),
                                           min_events=max(cmp_min_events // 3, 5),
                                           max_groups=max(cmp_max_groups_canton, 10),
@@ -1626,9 +1710,10 @@ def run_provincia(
         save_km_multi(
             km_canton,
             str(_figure_path(out_base, "km_canton_topN.png")),
-            f"KM por cantón — {display_label}",
+            f"KM por {cmp_geo_title} — {display_label}",
             max_months=window_max_months,
             top_n=5,
+            label_prefix=cmp_geo_label_prefix,
         )
         comparativa_figures += 1
 
@@ -2239,27 +2324,35 @@ def run_provincia(
     heatmap_out = _figure_path(out_base, "heatmap_canton.png")
     geo_base = Path("data") / "geo" / "provincias"
     prov_folder = prov_filter.upper().strip().replace(" ", "_")
-    # Usar archivo consolidado de cantones en lugar de provincia completa
-    geo_name = f"{prov_folder.lower()}_cantones.geojson"
-    geo_path = geo_base / prov_folder / geo_name
-    if not geo_path.exists():
-        # Fallback: archivo de provincia completa
-        geo_name = f"{prov_folder.lower()}.geojson"
+    heatmap_title = f"Heatmap {heatmap_label} - {display_label}"
+
+    if heatmap_geo_level == "parroquia":
+        canton_slug = _geo_slug(canton_filter)
+        geo_path = geo_base / prov_folder / "parroquias" / f"{canton_slug}.geojson"
+        if canton_filter and not geo_path.exists():
+            _ensure_parroquias_geojson_for_canton(prov_filter, canton_filter, geo_path)
+    else:
+        geo_name = f"{prov_folder.lower()}_cantones.geojson"
         geo_path = geo_base / prov_folder / geo_name
-    if not geo_path.exists():
-        geo_path = geo_base / "ECUADOR.geojson"
+        if not geo_path.exists():
+            geo_name = f"{prov_folder.lower()}.geojson"
+            geo_path = geo_base / prov_folder / geo_name
+        if not geo_path.exists():
+            geo_path = geo_base / "ECUADOR.geojson"
+
     if heatmap_canton_path.exists() and geo_path.exists():
         save_heatmap_cantones_geo(
             str(heatmap_canton_path),
             str(geo_path),
             str(heatmap_out),
-            f"Heatmap cantonal — {display_label}",
+            heatmap_title,
             province=prov_filter,
+            geo_level=heatmap_geo_level,
         )
     else:
         save_heatmap_placeholder(
             str(heatmap_out),
-            f"Heatmap cantonal — {display_label}",
+            heatmap_title,
         )
     legacy_heatmap_fig = out_base / "figures" / "heatmap_canton.png"
     if legacy_heatmap_fig != heatmap_out and legacy_heatmap_fig.exists():

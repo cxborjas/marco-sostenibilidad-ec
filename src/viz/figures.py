@@ -1057,7 +1057,7 @@ def save_km_flags(km_flags: dict[str, dict[str, pd.DataFrame]], outpath: str, ti
 
 def save_heatmap_placeholder(outpath: str, title: str) -> None:
     fig, ax = plt.subplots(figsize=(8, 5))
-    ax.text(0.5, 0.5, "Heatmap cantonal no disponible", ha="center", va="center")
+    ax.text(0.5, 0.5, "Heatmap geográfico no disponible", ha="center", va="center")
     ax.set_axis_off()
     ax.set_title(title)
     fig.tight_layout()
@@ -1071,6 +1071,7 @@ def save_heatmap_cantones_geo(
     outpath: str,
     title: str,
     province: str | None = None,
+    geo_level: str = "canton",
 ) -> None:
     try:
         import geopandas as gpd
@@ -1084,16 +1085,31 @@ def save_heatmap_cantones_geo(
         save_heatmap_placeholder(outpath, title)
         return
 
-    if "canton" not in df.columns:
+    join_col = "parroquia" if (geo_level or "").strip().lower() == "parroquia" else "canton"
+    if join_col not in df.columns:
         save_heatmap_placeholder(outpath, title)
         return
 
     value_col = "ruc_share" if "ruc_share" in df.columns else "establishments_share"
-    value_label = "Participacion RUC" if value_col == "ruc_share" else "Participacion establecimientos"
+    level_label = "parroquial" if join_col == "parroquia" else "cantonal"
+    value_label = (
+        f"Participacion RUC ({level_label})"
+        if value_col == "ruc_share"
+        else f"Participacion establecimientos ({level_label})"
+    )
 
     df = df.copy()
     # Usar operaciones vectorizadas
-    df["_join"] = df["canton"].str.strip().str.upper().str.normalize('NFKD').str.encode('ascii', 'ignore').str.decode('ascii')
+    df["_join"] = (
+        df[join_col]
+        .astype("string")
+        .fillna("")
+        .str.strip()
+        .str.upper()
+        .str.normalize('NFKD')
+        .str.encode('ascii', 'ignore')
+        .str.decode('ascii')
+    )
 
     try:
         gdf = gpd.read_file(geojson_path)
@@ -1102,7 +1118,12 @@ def save_heatmap_cantones_geo(
         return
 
     name_col = None
-    for col in ["DPA_DESCAN", "DPA_DESCAN_", "DPA_DESCANM", "DPA_DES_CAN", "CANTON"]:
+    if join_col == "parroquia":
+        name_candidates = ["DPA_DESPAR", "DPA_DESPAR_", "DPA_DESPARM", "DPA_DES_PAR", "PARROQUIA"]
+    else:
+        name_candidates = ["DPA_DESCAN", "DPA_DESCAN_", "DPA_DESCANM", "DPA_DES_CAN", "CANTON"]
+
+    for col in name_candidates:
         if col in gdf.columns:
             name_col = col
             break
