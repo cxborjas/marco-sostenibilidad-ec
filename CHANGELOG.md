@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows semantic versioning vMAJOR.MINOR.
 
+## v1.5 - 2026-02-12
+### Executive summary
+- Nuevo notebook `02_run_cantones.ipynb` para ejecutar la pipeline por provincia, rango de anos y seleccion interactiva de cantones.
+- Flujo cantonal estabilizado para casos con filtros vacios (sin RUC en el canton seleccionado), evitando caidas en QC y colapso.
+- Correccion de imports y dependencias en notebooks para usar rutas reales del paquete (`src.etl.ingest`).
+- Dashboards sin warnings de `tight_layout` en ejecucion normal del pipeline.
+
+### Notebooks
+- Se agrega `02_run_cantones.ipynb`.
+- Se actualiza `01_run_provincia.ipynb`.
+- En `02_run_cantones.ipynb`, la lista de cantones ahora se filtra por la provincia elegida antes de mostrar opciones.
+
+### Data/ETL
+- `collapse_to_ruc` conserva esquema esperado cuando el dataframe de entrada queda vacio, permitiendo continuar el pipeline y exportar artefactos.
+
+### QC
+- Manejo robusto de `pd.NA` en calculos de missingness y shares para evitar `TypeError: float() argument must be a string or a real number, not 'NAType'`.
+- Ajustes equivalentes en metricas ejecutivas para columnas criticas y agregaciones con subconjuntos vacios.
+
+### Visualizations/Report
+- `save_qc_dashboard` y `save_metrics_dashboard` reemplazan `tight_layout` por ajustes manuales compatibles con los ejes/tablas del layout.
+
+### Fixes
+- Corregido `ModuleNotFoundError: No module named 'src.data'` en `02_run_cantones.ipynb`.
+- Corregidas rutas de ejecucion donde antes fallaba el procesamiento cantonal al seleccionar un canton sin registros.
+
 ## v1.4 - 2026-02-11
 ### Executive summary
 - F10 (KM por obligación): sombreado suave bajo la curva; leyenda con n/eventos/censurados y grupo sin curva; log-rank con significancia.
