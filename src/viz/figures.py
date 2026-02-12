@@ -569,6 +569,9 @@ def save_bar_cohortes(coh: pd.DataFrame, outpath: str, title: str) -> None:
 
     df = coh.copy()
     df["cohort_5y"] = df["cohort_5y"].astype("string")
+    # Excluir filas fuera de ventana (etiquetas tipo "FUERA DE VENTANA")
+    cohort_upper = df["cohort_5y"].str.upper().fillna("")
+    mask_out = cohort_upper.str.contains("FUERA") & cohort_upper.str.contains("VENTANA")
     births_col = "births_n" if "births_n" in df.columns else None
     closures_col = "closures_terminal_n" if "closures_terminal_n" in df.columns else None
     if births_col is None and closures_col is None:
@@ -579,19 +582,96 @@ def save_bar_cohortes(coh: pd.DataFrame, outpath: str, title: str) -> None:
         plt.close(fig)
         return
 
+    excluded = df[mask_out].copy()
+    df = df[~mask_out].copy()
+    if df.empty:
+        ax.text(0.5, 0.5, "Sin cohortes en ventana", ha="center", va="center")
+        ax.set_title(title)
+        fig.tight_layout()
+        fig.savefig(outpath, dpi=200)
+        plt.close(fig)
+        return
     df = df.sort_values("cohort_5y").reset_index(drop=True)
     positions = range(len(df))
     width = 0.38
+    births_total = 0.0
+    closures_total = 0.0
     if births_col:
-        ax.bar([p - width / 2 for p in positions], df[births_col], width=width, label="Nacimientos")
+        df[births_col] = pd.to_numeric(df[births_col], errors="coerce").fillna(0)
+        births_total = float(df[births_col].sum())
+        births_bars = ax.bar(
+            [p - width / 2 for p in positions],
+            df[births_col],
+            width=width,
+            label=f"Nacimientos (n={_fmt_int(births_total)})",
+            color=COLOR_PALETTE[0],
+            edgecolor="white",
+            linewidth=1.2,
+            alpha=0.9,
+        )
     if closures_col:
-        ax.bar([p + width / 2 for p in positions], df[closures_col], width=width, label="Cierres")
+        df[closures_col] = pd.to_numeric(df[closures_col], errors="coerce").fillna(0)
+        closures_total = float(df[closures_col].sum())
+        closures_bars = ax.bar(
+            [p + width / 2 for p in positions],
+            df[closures_col],
+            width=width,
+            label=f"Cierres (n={_fmt_int(closures_total)})",
+            color="#e53e3e",
+            edgecolor="white",
+            linewidth=1.2,
+            alpha=0.9,
+        )
     ax.set_xticks(list(positions))
     ax.set_xticklabels(df["cohort_5y"], rotation=45, ha="right")
     ax.set_ylabel("Conteo (RUC)")
+    ymax = max(df[births_col].max() if births_col else 0, df[closures_col].max() if closures_col else 0)
+    ymax = max(float(ymax), 1.0)
+    ax.set_ylim(0, ymax * 1.25)
     ax.set_title(title)
     ax.legend(fontsize=8)
-    fig.text(0.01, 0.01, "Cohortes quinquenales por inicio de actividades.", fontsize=7, ha="left")
+
+    def _annotate_bars(bars, total):
+        if total <= 0:
+            return
+        for bar in bars:
+            value = float(bar.get_height())
+            if value <= 0:
+                continue
+            pct = value / total * 100
+            label = f"{int(round(value)):,} ({pct:.1f}%)"
+            x = bar.get_x() + bar.get_width() / 2
+            y = bar.get_height()
+            ax.text(
+                x,
+                y + ymax * 0.03,
+                label,
+                ha="center",
+                va="bottom",
+                fontsize=7,
+                fontweight="600",
+                color="#2d3748",
+            )
+
+    if births_col:
+        _annotate_bars(births_bars, births_total)
+    if closures_col:
+        _annotate_bars(closures_bars, closures_total)
+
+    note_parts = [
+        "Cohortes quinquenales por inicio de actividades.",
+        f"Nacimientos total: {_fmt_int(births_total)}.",
+        f"Cierres total: {_fmt_int(closures_total)}.",
+    ]
+    if births_total > 0 and closures_total > 0:
+        note_parts.append(f"Cierres/Nacimientos: {_fmt_percent(closures_total / births_total)}.")
+    if not excluded.empty:
+        excl_births = float(pd.to_numeric(excluded.get(births_col), errors="coerce").fillna(0).sum()) if births_col else 0.0
+        excl_closures = float(pd.to_numeric(excluded.get(closures_col), errors="coerce").fillna(0).sum()) if closures_col else 0.0
+        note_parts.append(
+            f"Excluido fuera de ventana: Nacimientos={_fmt_int(excl_births)}, Cierres={_fmt_int(excl_closures)}."
+        )
+    fig.text(0.01, 0.01, " ".join(note_parts), fontsize=7, ha="left", color="#718096")
     fig.tight_layout(rect=[0, 0.05, 1, 1])
     fig.savefig(outpath, dpi=200)
     plt.close(fig)
@@ -851,13 +931,85 @@ def save_km_flags(km_flags: dict[str, dict[str, pd.DataFrame]], outpath: str, ti
         plt.close(fig)
         return
 
+    def _normalize_flag_label(value: str) -> str:
+        v = str(value).strip().upper()
+        if v in {"SI", "SÍ"}:
+            return "Sí"
+        if v == "NO":
+            return "No"
+        if v in {"NO INFORMADO", "N/I", "NA"}:
+            return "No informado"
+        return str(value)
+
     rows = len(km_flags)
     fig, axes = plt.subplots(rows, 1, figsize=(8, 3.5 * rows))
     if rows == 1:
         axes = [axes]
 
+    title_map = {
+        "obligado_3cat": "Kaplan–Meier por Obligación (Sí vs No)",
+        "agente_retencion_3cat": "Kaplan–Meier por Agente de Retención (Sí vs No)",
+        "especial_3cat": "Kaplan–Meier por Contribuyente Especial (Sí vs No)",
+    }
+
     for ax, (flag, km_map) in zip(axes, km_flags.items(), strict=False):
-        _plot_km_multi(ax, km_map, f"KM por {flag}")
+        group_counts: dict[str, int] = {}
+        label_map: dict[str, str] = {}
+        for grp, km in km_map.items():
+            label_map[grp] = _normalize_flag_label(grp)
+            if km is None or km.empty or "n_at_risk" not in km.columns:
+                continue
+            try:
+                n_val = int(pd.to_numeric(km["n_at_risk"], errors="coerce").max())
+            except (TypeError, ValueError):
+                continue
+            group_counts[grp] = n_val
+
+        label_map.setdefault("SI", "Sí")
+        label_map.setdefault("SÍ", "Sí")
+        label_map.setdefault("NO", "No")
+
+        has_yes = any(_normalize_flag_label(g) == "Sí" for g in km_map.keys())
+        has_no = any(_normalize_flag_label(g) == "No" for g in km_map.keys())
+        legend_only: list[str] = []
+        if not has_yes:
+            legend_only.append("SI")
+            group_counts.setdefault("SI", 0)
+        if not has_no:
+            legend_only.append("NO")
+            group_counts.setdefault("NO", 0)
+
+        max_months = 300
+        _plot_km_multi(
+            ax,
+            km_map,
+            title_map.get(flag, f"Kaplan–Meier por {flag}"),
+            max_months=max_months,
+            fill=False,
+            group_counts=group_counts if group_counts else None,
+            label_map=label_map if label_map else None,
+            legend_only=legend_only if legend_only else None,
+            legend_only_suffix="sin curva",
+        )
+
+        t_ref = 60 if max_months >= 60 else 120 if max_months >= 120 else None
+        if t_ref and km_map:
+            parts = []
+            for grp, km in km_map.items():
+                s_val = _survival_at_time(km, t_ref)
+                lbl = label_map.get(grp, grp) if label_map else grp
+                parts.append(f"{lbl}={_fmt_percent(s_val)}")
+            note = f"S({t_ref}m): " + ", ".join(parts)
+            ax.text(
+                0.01,
+                0.02,
+                note,
+                transform=ax.transAxes,
+                fontsize=7,
+                color="#4a5568",
+                ha="left",
+                va="bottom",
+            )
 
     fig.suptitle(title, fontsize=12, fontweight="bold")
     fig.text(0.01, 0.01, "Asociativo, no causal.", fontsize=7, ha="left")
@@ -1407,55 +1559,281 @@ def save_metrics_dashboard(metrics: dict, outpath: str, title: str) -> None:
     geo = metrics.get("geography", {}) or {}
     sector = metrics.get("sector", {}) or {}
     surv = metrics.get("survival", {}) or {}
+    def _as_float(value) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return float("nan")
 
-    run_rows = [
-        ("Provincia", str(run.get("province", "N/A"))),
+    def _ratio_phrase(pct: float | None) -> str:
+        if pct is None or not math.isfinite(pct):
+            return "N/A"
+        p = float(pct)
+        if p >= 0.875:
+            return "≈ 9 de cada 10"
+        if p >= 0.8:
+            return "≈ 4 de cada 5"
+        if p >= 0.75:
+            return "≈ 3 de cada 4"
+        if p >= 0.67:
+            return "≈ 2 de cada 3"
+        if p >= 0.6:
+            return "≈ 3 de cada 5"
+        if p >= 0.5:
+            return "≈ 1 de cada 2"
+        if p > 0:
+            denom = max(int(round(1 / p)), 2)
+            return f"≈ 1 de cada {denom}"
+        return "N/A"
+
+    fig = plt.figure(figsize=(14, 9))
+    fig.patch.set_facecolor("#f7f8fc")
+    gs = fig.add_gridspec(3, 2, height_ratios=[1.1, 1, 1], hspace=0.35, wspace=0.28)
+    ax_cards = fig.add_subplot(gs[0, :])
+    ax_run = fig.add_subplot(gs[1, 0])
+    ax_geo = fig.add_subplot(gs[1, 1])
+    ax_sector = fig.add_subplot(gs[2, 0])
+    ax_surv = fig.add_subplot(gs[2, 1])
+
+    for ax in [ax_cards, ax_run, ax_geo, ax_sector, ax_surv]:
+        ax.set_facecolor("#f7f8fc")
+        ax.set_axis_off()
+
+    # KPI cards
+    births = dem.get("births_total_2000_2024")
+    closures = dem.get("closures_terminal_total_2000_2024")
+    net = dem.get("net_total_2000_2024")
+    s60 = surv.get("S_60m")
+    s120 = surv.get("S_120m")
+    median = surv.get("median_survival_months")
+    early24 = surv.get("early_closure_share_lt_24m")
+
+    cards = [
+        ("Nacimientos", _fmt_int(births), "#2563eb", None),
+        ("Cierres", _fmt_int(closures), "#ef4444", None),
+        ("Neto", _fmt_int(net), "#14b8a6", None),
+        ("Mediana supervivencia", _fmt_months(median), "#f59e0b", None),
+        ("S(60m)", _fmt_percent(s60), "#6366f1", f"S(120m) {_fmt_percent(s120)}"),
+        ("% cierres <24m", _fmt_percent(early24), "#0ea5e9", None),
+    ]
+
+    ax_cards.text(
+        0.02,
+        0.96,
+        title,
+        fontsize=16,
+        fontweight="bold",
+        color="#1f2937",
+        ha="left",
+        va="top",
+    )
+    subtitle = f"Provincia {run.get('province', 'N/A')} · Ventana {run.get('window_start_year', 'N/A')}-{run.get('window_end_year', 'N/A')}"
+    ax_cards.text(0.02, 0.885, subtitle, fontsize=9.5, color="#6b7280", ha="left", va="top")
+
+    cols = 3
+    rows = 2
+    pad = 0.03
+    top_margin = 0.28
+    card_w = (1 - pad * (cols + 1)) / cols
+    card_h = (1 - top_margin - pad * (rows + 1)) / rows
+    top_y = 1 - top_margin - pad - card_h
+
+    for idx, (label, value, accent, subline) in enumerate(cards):
+        row = idx // cols
+        col = idx % cols
+        x = pad + col * (card_w + pad)
+        y = top_y - row * (card_h + pad)
+        shadow = FancyBboxPatch(
+            (x + 0.006, y - 0.008),
+            card_w,
+            card_h,
+            boxstyle="round,pad=0.012,rounding_size=0.02",
+            facecolor="#dbe0ea",
+            edgecolor="none",
+            alpha=0.35,
+            zorder=1,
+        )
+        ax_cards.add_patch(shadow)
+        card = FancyBboxPatch(
+            (x, y),
+            card_w,
+            card_h,
+            boxstyle="round,pad=0.012,rounding_size=0.02",
+            facecolor="white",
+            edgecolor="#e5e7eb",
+            linewidth=1.0,
+            zorder=2,
+        )
+        ax_cards.add_patch(card)
+        bar = FancyBboxPatch(
+            (x, y + card_h - 0.015),
+            card_w,
+            0.015,
+            boxstyle="round,pad=0.0,rounding_size=0.02",
+            facecolor=accent,
+            edgecolor="none",
+            zorder=3,
+        )
+        ax_cards.add_patch(bar)
+        ax_cards.text(
+            x + 0.04 * card_w,
+            y + 0.72 * card_h,
+            label,
+            fontsize=9.5,
+            fontweight="600",
+            color="#4b5563",
+            ha="left",
+            va="center",
+            zorder=4,
+        )
+        ax_cards.text(
+            x + 0.96 * card_w,
+            y + 0.38 * card_h,
+            value,
+            fontsize=13.5,
+            fontweight="bold",
+            color="#111827",
+            ha="right",
+            va="center",
+            zorder=4,
+        )
+        if subline:
+            ax_cards.text(
+                x + 0.96 * card_w,
+                y + 0.16 * card_h,
+                subline,
+                fontsize=8.5,
+                color="#6b7280",
+                ha="right",
+                va="center",
+                zorder=4,
+            )
+
+    # Run block
+    ax_run.set_axis_off()
+    ax_run.text(0.02, 0.92, "Run", fontsize=11, fontweight="bold", color="#2d3748", ha="left")
+    run_items = [
         ("Ventana", f"{run.get('window_start_year', 'N/A')} - {run.get('window_end_year', 'N/A')}"),
-        ("Censor date", str(run.get("censor_date", "N/A"))),
-        ("Raw filename", str((run.get("inputs", {}) or {}).get("raw_filename", "N/A"))),
-        ("Nacimientos", _fmt_int(dem.get("births_total_2000_2024"))),
-        ("Cierres terminales", _fmt_int(dem.get("closures_terminal_total_2000_2024"))),
-        ("Netos", _fmt_int(dem.get("net_total_2000_2024"))),
+        ("Censura", str(run.get("censor_date", "N/A"))),
+        ("RUC incluidos", _fmt_int((metrics.get("survival", {}) or {}).get("km", {}).get("n_total"))),
     ]
+    y = 0.74
+    for label, value in run_items:
+        ax_run.text(0.02, y, label, fontsize=9, color="#4b5563", ha="left")
+        ax_run.text(0.98, y, value, fontsize=9.5, color="#111827", ha="right")
+        y -= 0.18
 
-    geo_rows = [
-        ("Top3 RUC share", _fmt_percent(geo.get("top3_concentration_by_ruc_share"))),
-        ("Top5 RUC share", _fmt_percent(geo.get("top5_concentration_by_ruc_share"))),
-        ("Top3 estab share", _fmt_percent(geo.get("top3_concentration_by_establishments_share"))),
-        ("Top5 estab share", _fmt_percent(geo.get("top5_concentration_by_establishments_share"))),
+    # Geografia block
+    ax_geo.set_axis_off()
+    ax_geo.text(0.02, 0.92, "Geografía", fontsize=11, fontweight="bold", color="#2d3748", ha="left")
+    geo_vals = [
+        ("RUC Top3", _as_float(geo.get("top3_concentration_by_ruc_share"))),
+        ("RUC Top5", _as_float(geo.get("top5_concentration_by_ruc_share"))),
+        ("Estab Top3", _as_float(geo.get("top3_concentration_by_establishments_share"))),
+        ("Estab Top5", _as_float(geo.get("top5_concentration_by_establishments_share"))),
     ]
+    bars_ax = ax_geo.inset_axes([0.05, 0.18, 0.9, 0.62])
+    bars_ax.set_facecolor("#f7f8fc")
+    bars_ax.set_xlim(0, 1.0)
+    bars_ax.set_ylim(-0.5, len(geo_vals) - 0.5)
+    bars_ax.spines["top"].set_visible(False)
+    bars_ax.spines["right"].set_visible(False)
+    bars_ax.spines["left"].set_visible(False)
+    bars_ax.spines["bottom"].set_visible(False)
+    bars_ax.set_xticks([])
+    bars_ax.set_yticks(range(len(geo_vals)))
+    bars_ax.set_yticklabels([g[0] for g in geo_vals], fontsize=8.5)
+    colors = ["#2563eb", "#2563eb", "#14b8a6", "#14b8a6"]
+    for idx, (label, val) in enumerate(geo_vals):
+        v = val if math.isfinite(val) else 0.0
+        bars_ax.barh(idx, v, color=colors[idx], alpha=0.85, height=0.5)
+        txt = _fmt_percent(val) if math.isfinite(val) else "N/A"
+        bars_ax.text(1.02, idx, txt, va="center", ha="left", fontsize=8, color="#4b5563")
+    bars_ax.invert_yaxis()
 
+    top5_ruc = _as_float(geo.get("top5_concentration_by_ruc_share"))
+    if math.isfinite(top5_ruc):
+        if top5_ruc >= 0.9:
+            conc_label = "altísima concentración territorial"
+        elif top5_ruc >= 0.75:
+            conc_label = "alta concentración territorial"
+        elif top5_ruc >= 0.6:
+            conc_label = "concentración moderada"
+        else:
+            conc_label = "baja concentración"
+        geo_line = f"Top5={_fmt_percent(top5_ruc)} ({conc_label})"
+    else:
+        geo_line = "Top5=N/A"
+    ax_geo.text(0.02, 0.08, geo_line, fontsize=8, color="#4b5563", ha="left")
+
+    # Sector block
+    ax_sector.set_axis_off()
+    ax_sector.text(0.02, 0.92, "Sector", fontsize=11, fontweight="bold", color="#2d3748", ha="left")
     leading = sector.get("leading_macro_sector", {}) or {}
     div = sector.get("diversification", {}) or {}
-    sector_rows = [
-        ("Macro líder", str(leading.get("letter", "N/A"))),
-        ("Macro líder etiqueta", str(leading.get("label", "N/A"))),
-        ("Macro líder share", _fmt_percent(leading.get("share"))),
-        ("Top1 macro share", _fmt_percent(div.get("top1_macro_sector_share"))),
-        ("HHI macro", _fmt_float(div.get("hhi_macro_sector"))),
-        ("Macro efectivos", _fmt_float(div.get("effective_macro_sectors"))),
+    lead_letter = str(leading.get("letter", "N/A"))
+    lead_label_full = str(leading.get("label", "N/A"))
+    lead_label = _trim_text(lead_label_full, max_len=26)
+    lead_share = _fmt_percent(leading.get("share"))
+    hhi = _as_float(div.get("hhi_macro_sector"))
+    eff = _as_float(div.get("effective_macro_sectors"))
+
+    if math.isfinite(hhi):
+        if hhi < 0.15:
+            hhi_txt = "HHI bajo → diversificado"
+            hhi_color = "#22c55e"
+        elif hhi < 0.25:
+            hhi_txt = "HHI medio → concentración moderada"
+            hhi_color = "#f59e0b"
+        else:
+            hhi_txt = "HHI alto → concentrado"
+            hhi_color = "#ef4444"
+    else:
+        hhi_txt = "HHI N/A"
+        hhi_color = "#9ca3af"
+
+    ax_sector.text(0.02, 0.7, f"Macro líder: {lead_letter}", fontsize=9, color="#4b5563", ha="left")
+    ax_sector.text(0.98, 0.7, lead_share, fontsize=9.5, color="#111827", ha="right")
+    ax_sector.text(0.02, 0.54, f"Etiqueta: {lead_label}", fontsize=9, color="#4b5563", ha="left")
+    ax_sector.text(0.02, 0.34, f"HHI={_fmt_float(hhi)}", fontsize=9, color="#4b5563", ha="left")
+    ax_sector.text(0.98, 0.34, hhi_txt, fontsize=9, color=hhi_color, ha="right")
+    ax_sector.text(
+        0.02,
+        0.14,
+        f"Macros efectivos: {_fmt_float(eff)} (≈ N sectores equilibrados)",
+        fontsize=8.5,
+        color="#4b5563",
+        ha="left",
+    )
+
+    # Supervivencia block
+    ax_surv.set_axis_off()
+    ax_surv.text(0.02, 0.92, "Supervivencia", fontsize=11, fontweight="bold", color="#2d3748", ha="left")
+    surv_items = [
+        ("Supervivencia 60m", _fmt_percent(s60)),
+        ("Supervivencia 120m", _fmt_percent(s120)),
+        ("Mediana", _fmt_months(median)),
+        ("% cierres <24m", _fmt_percent(early24)),
     ]
+    y = 0.74
+    for label, value in surv_items:
+        ax_surv.text(0.02, y, label, fontsize=9, color="#4b5563", ha="left")
+        ax_surv.text(0.98, y, value, fontsize=9.5, color="#111827", ha="right")
+        y -= 0.16
 
-    surv_rows = [
-        ("S 12m", _fmt_percent(surv.get("S_12m"))),
-        ("S 24m", _fmt_percent(surv.get("S_24m"))),
-        ("S 60m", _fmt_percent(surv.get("S_60m"))),
-        ("S 120m", _fmt_percent(surv.get("S_120m"))),
-        ("Mediana", _fmt_months(surv.get("median_survival_months"))),
-        ("Cierres <24m", _fmt_percent(surv.get("early_closure_share_lt_24m"))),
-    ]
+    s60_val = _as_float(s60)
+    if math.isfinite(s60_val):
+        surv_line = f"Supervivencia 60m={_fmt_percent(s60_val)} ({_ratio_phrase(s60_val)})"
+    else:
+        surv_line = "S(60m)=N/A"
+    ax_surv.text(0.02, 0.08, surv_line, fontsize=8, color="#4b5563", ha="left")
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    fig.patch.set_facecolor('white')
-    
-    # Agregar título principal con estilo
-    fig.suptitle(title, fontsize=16, fontweight='bold', color='#2d3748', y=0.98)
-    
-    _render_table(axes[0, 0], run_rows, "Run + demografía")
-    _render_table(axes[0, 1], geo_rows, "Geografía")
-    _render_table(axes[1, 0], sector_rows, "Sector")
-    _render_table(axes[1, 1], surv_rows, "Supervivencia")
-
-    fig.tight_layout(rect=[0, 0, 1, 0.97])
-    fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
+    raw_filename = str((run.get("inputs", {}) or {}).get("raw_filename", "N/A"))
+    footer_parts = [f"Raw: {raw_filename}"]
+    if lead_label_full and lead_label_full != lead_label:
+        footer_parts.append(f"Macro líder (completo): {lead_label_full}")
+    footer = " · ".join(footer_parts)
+    fig.text(0.01, 0.01, footer, fontsize=7, ha="left", color="#718096")
+    fig.tight_layout(rect=[0, 0.03, 1, 0.98])
+    fig.savefig(outpath, dpi=300, bbox_inches="tight", facecolor="#f7f8fc", edgecolor="none")
     plt.close(fig)
