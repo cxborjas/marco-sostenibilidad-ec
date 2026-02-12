@@ -2,6 +2,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from pathlib import Path
 from time import perf_counter
+import threading
 import argparse
 import math
 import shutil
@@ -143,6 +144,17 @@ def _missing_mask(series: pd.Series) -> pd.Series:
     return (s == "") | s_upper.isin(["NO INFORMADO", "N/A", "NA"])
 
 
+def _running_in_notebook() -> bool:
+    try:
+        from IPython import get_ipython
+    except Exception:
+        return False
+    ip = get_ipython()
+    if ip is None:
+        return False
+    return "IPKernelApp" in getattr(ip, "config", {})
+
+
 class _ProgressPrinter:
     def __init__(self, stages: list[str]):
         self.stages = stages
@@ -151,12 +163,63 @@ class _ProgressPrinter:
         self.start = perf_counter()
         self.last_step = self.start
         self.stage_durations: list[float] = []
+        self._lock = threading.Lock()
+        self._ticker_stop = threading.Event()
+        self._ticker_thread: threading.Thread | None = None
+        self._live = _running_in_notebook() or os.getenv("SRI_LIVE_PROGRESS") == "1"
+        self._live_interval = float(os.getenv("SRI_LIVE_PROGRESS_INTERVAL", "1"))
+
+    def _estimate_remaining(self) -> float | None:
+        if self.completed >= self.total:
+            return 0.0
+        if not self.stage_durations:
+            return None
+        recent = self.stage_durations[-5:]
+        avg = sum(recent) / len(recent)
+        if avg <= 0:
+            return None
+        now = perf_counter()
+        stage_elapsed = max(0.0, now - self.last_step)
+        remaining_stages = max(self.total - self.completed - 1, 0)
+        current_remain = max(avg - stage_elapsed, 0.0)
+        return current_remain + avg * remaining_stages
+
+    def _format_live_line(self) -> str:
+        now = perf_counter()
+        elapsed = now - self.start
+        pct = (self.completed / self.total) * 100 if self.total else 100.0
+        return (
+            f"[{pct:5.1f}% · {self.completed}/{self.total}] "
+            f"transcurrido {_format_seconds(elapsed)}"
+        )
+
+    def _ticker_loop(self) -> None:
+        while not self._ticker_stop.is_set():
+            with self._lock:
+                line = self._format_live_line()
+                print(f"\r{line:<120}", end="", flush=True)
+            self._ticker_stop.wait(self._live_interval)
+
+    def _start_ticker(self) -> None:
+        if not self._live or self._ticker_thread is not None:
+            return
+        self._ticker_stop.clear()
+        self._ticker_thread = threading.Thread(target=self._ticker_loop, daemon=True)
+        self._ticker_thread.start()
+
+    def _stop_ticker(self) -> None:
+        if not self._ticker_thread:
+            return
+        self._ticker_stop.set()
+        self._ticker_thread.join(timeout=1)
+        self._ticker_thread = None
 
     def announce(self, province: str):
         print(f"Iniciando pipeline para {province} ({self.total} etapas)...", flush=True)
         for idx, label in enumerate(self.stages, start=1):
             print(f"  {idx:02d}. {label}", flush=True)
         print("-" * 40, flush=True)
+        self._start_ticker()
 
     def step(self, extra: str | None = None):
         self.completed += 1
@@ -167,24 +230,25 @@ class _ProgressPrinter:
         if stage_elapsed >= 0:
             self.stage_durations.append(stage_elapsed)
         pct = (self.completed / self.total) * 100 if self.total else 100.0
-        remaining = None
-        if self.completed < self.total and self.stage_durations:
-            recent = self.stage_durations[-5:]
-            avg = sum(recent) / len(recent)
-            if avg > 0:
-                remaining = avg * (self.total - self.completed)
         if self.completed - 1 < len(self.stages):
             base = self.stages[self.completed - 1]
         else:
             base = f"Paso {self.completed}"
         detail = f"{base} — {extra}" if extra else base
-        print(
-            f"[{pct:5.1f}% · {self.completed}/{self.total}] {detail} | tiempo {_format_seconds(elapsed)} · ETA {_format_seconds(remaining)}",
-            flush=True,
-        )
+        with self._lock:
+            if self._live:
+                print("\r" + " " * 140 + "\r", end="")
+            print(
+                f"[{pct:5.1f}% · {self.completed}/{self.total}] {detail} | tiempo {_format_seconds(elapsed)}",
+                flush=True,
+            )
 
     def finish(self):
         total = perf_counter() - self.start
+        self._stop_ticker()
+        if self._live:
+            with self._lock:
+                print("\r" + " " * 140 + "\r", end="")
         print(f"Pipeline completado en {_format_seconds(total)}.", flush=True)
 
 
