@@ -4,6 +4,31 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows semantic versioning vMAJOR.MINOR.
 
+## v1.6 - 2026-02-12
+### Executive summary
+- Se consolida el modo canton con salidas geograficas por parroquia en F02, F08 y F14.
+- Se agrega fallback geoespacial nacional de parroquias comprimido para evitar versionar artefactos pesados sin compresion.
+- Se actualiza documentacion principal y esquema de outputs para reflejar el comportamiento real del pipeline.
+
+### Visualizations/Report
+- F02 (`cantones_top10`) en modo canton ahora representa parroquias top 10.
+- F08 (`km_canton_topN`) en modo canton ahora estratifica por parroquia.
+- F14 (`heatmap_canton`) en modo canton ahora renderiza heatmap parroquial.
+- Etiquetas de report HTML adaptativas segun modo (canton vs parroquia).
+
+### Data/Geo
+- Se agrega `data/geo/provincias/ECUADOR_parroquias.geojson.gz` como insumo nacional comprimido.
+- El pipeline descomprime temporalmente el `.geojson.gz` solo cuando es necesario y limpia el directorio temporal al finalizar.
+- Se mantiene cache on-demand por canton en `data/geo/provincias/PROVINCIA/parroquias/CANTON.geojson`.
+
+### Documentation
+- README general actualizado con estructura del proyecto, modos de ejecucion (01/02) y comportamiento dinamico de outputs geograficos.
+- `docs/outputs_schema.md` actualizado para incluir T/F 16-18, modos provincia/canton y semantica dinamica de T02/T08/T14 y F02/F08/F14.
+- `data/geo/README.md` actualizado con uso del insumo parroquial comprimido y fallback operativo.
+
+### Fixes
+- Verificado que el modo provincial (`canton=None`) mantiene F08 y F14 a nivel cantonal.
+
 ## v1.5 - 2026-02-12
 ### Executive summary
 - Nuevo notebook `02_run_cantones.ipynb` para ejecutar la pipeline por provincia, rango de anos y seleccion interactiva de cantones.

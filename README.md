@@ -12,6 +12,7 @@ Las salidas incluyen demografía, geografía, estructura sectorial y supervivenc
 - Unidad: sociedad (RUC) colapsada desde establecimientos.
 - Provincia: presencia operativa (>=1 establecimiento).
 - Enfoque: descriptivo, no causal.
+- Modos: corrida provincial completa y corrida por cantón.
 - Outputs: tablas, figuras, metrics.json y reporte HTML.
 
 ## Mapa del documento
@@ -64,15 +65,34 @@ Las salidas incluyen demografía, geografía, estructura sectorial y supervivenc
 - Supervivencia: S(1/2/5/10), mediana, cierre temprano y período crítico.
 
 ## Comparativas internas (asociativas)
-- Comparativas por sector, cantón top N, banderas y escala.
+- Comparativas por sector, geografía top N (cantón o parroquia), banderas y escala.
 - Umbrales mínimos y columnas `km_included`/`exclusion_reason` para transparencia.
 
 ## Set de visualizaciones obligatorio
 - Línea de tiempo: [figures/demografia_linea_tiempo.png](figures/demografia_linea_tiempo.png).
 - Barras: [figures/cantones_top10.png](figures/cantones_top10.png), [figures/macro_sectores.png](figures/macro_sectores.png), [figures/actividades_top10.png](figures/actividades_top10.png).
+  - En modo cantón, `cantones_top10.png` muestra parroquias top 10.
 - Histograma: [figures/hist_duracion_cierres.png](figures/hist_duracion_cierres.png).
 - KM general y estratificado: [figures/km_general.png](figures/km_general.png) y figuras KM por grupo.
+  - En modo cantón, `km_canton_topN.png` se estratifica por parroquia.
 - Executive: [figures/executive_kpis.png](figures/executive_kpis.png) y [tables/executive_kpis.csv](tables/executive_kpis.csv).
+  - En modo cantón, `heatmap_canton.png` se renderiza a nivel parroquial.
+
+## Cuadernos y modos de ejecucion
+- [notebooks/01_run_provincia.ipynb](notebooks/01_run_provincia.ipynb): corrida por provincia (single o batch).
+- [notebooks/02_run_cantones.ipynb](notebooks/02_run_cantones.ipynb): corrida interactiva por provincia, rango de años y uno o varios cantones.
+- CLI: `python -m src.reporting.export_artifacts --province PICHINCHA --raw_dir data/raw`.
+
+## Estructura del proyecto (resumen)
+- `configs/`: parametros globales, provincias y comparativas.
+- `data/`: insumos locales (`raw/`, `demo/`, `geo/`, `banderas/`).
+- `src/etl/`: carga, normalizacion y colapso a RUC.
+- `src/qc/`: controles de calidad de raw y RUC.
+- `src/metrics/`: demografia, geografia, sectorial, supervivencia y comparativas.
+- `src/viz/`: generacion de figuras y dashboards.
+- `src/reporting/`: export de artefactos, metrics.json y HTML report.
+- `notebooks/`: ejecucion interactiva.
+- `docs/`: metodologia, esquema de outputs y optimizaciones.
 
 ## ⚡ Optimizaciones de Rendimiento
 
@@ -113,14 +133,20 @@ Para más detalles técnicos y ejemplos avanzados, consulta la [documentación c
 ## Ejecución (local y Colab)
 - Local (VSCode/Jupyter): `conda env create -f environment.yml` o `python -m venv .venv && pip install -r requirements.txt`.
 - Colab: clona el repo y usa `pip install -r requirements.txt`.
-- Ejecución: [notebooks/01_run_provincia.ipynb](notebooks/01_run_provincia.ipynb) o `python -m src.reporting.export_artifacts --province PICHINCHA --raw_dir data/raw`.
+- Ejecución: [notebooks/01_run_provincia.ipynb](notebooks/01_run_provincia.ipynb), [notebooks/02_run_cantones.ipynb](notebooks/02_run_cantones.ipynb) o `python -m src.reporting.export_artifacts --province PICHINCHA --raw_dir data/raw`.
 - Ver detalle de estructura de datos en [data/README.md](data/README.md).
 
 ## Outputs estandarizados
-- Carpeta por provincia: outputs/PROVINCIA/ con tables/, figures/, qc/, report/ y metrics.json.
+- Carpeta por provincia: `outputs/PROVINCIA/` con `tables/`, `figures/`, `qc/`, `report/` y `metrics.json`.
+- Carpeta por cantón (modo cantón): `outputs/PROVINCIA/CANTON/` con la misma estructura.
 - Manifest de release: outputs/release_manifest.json.
 - Estructura completa en [docs/outputs_schema.md](docs/outputs_schema.md).
 - Si se configura `exclude_codes`, se genera tables/actividades_excluidas.csv con los codigos y actividades omitidas.
+
+## Insumos geo y tamaño de archivos
+- La capa nacional de parroquias se versiona comprimida: `data/geo/provincias/ECUADOR_parroquias.geojson.gz`.
+- El pipeline descomprime en un directorio temporal solo cuando se necesita para heatmaps parroquiales y limpia al finalizar.
+- El detalle de fuentes y uso esta en [data/geo/README.md](data/geo/README.md).
 
 ## Versionado y DOI
 - Versionado vMAJOR.MINOR, ver [CHANGELOG.md](CHANGELOG.md).
@@ -128,4 +154,3 @@ Para más detalles técnicos y ejemplos avanzados, consulta la [documentación c
 
 ## PDF del marco
 - Documento completo en [docs/pdf/README.md](docs/pdf/README.md).
-
