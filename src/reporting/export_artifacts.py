@@ -37,7 +37,7 @@ from src.viz.figures import (
     save_hist_duracion_cierres,
     save_km_plot,
     save_km_multi,
-    save_executive_kpi_card,
+    save_executive_kpi_dashboard,
     save_qc_dashboard,
     save_metrics_dashboard,
     save_km_flags,
@@ -343,7 +343,7 @@ def _number_outputs(out_base: Path) -> None:
         ("10", "comparativa_obligado_3cat.csv", "km_obligado_3cat.png", "Comparativa obligado"),
         ("11", "comparativa_agente_retencion_3cat.csv", "km_agente_retencion_3cat.png", "Comparativa agente retencion"),
         ("12", "comparativa_especial_3cat.csv", "km_especial_3cat.png", "Comparativa especial"),
-        ("13", "executive_kpis.csv", "executive_kpis.png", "KPIs ejecutivos"),
+        ("13", "executive_kpis.csv", "executive_kpis.png", "Resumen ejecutivo (tabla) / Dashboard ejecutivo (figura)"),
     ]
 
     rows = []
@@ -703,7 +703,7 @@ def _build_html_report(out_base: Path) -> Path:
         filter(
             None,
             [
-                _render_fig_block(_f("executive_kpis.png"), "KPIs ejecutivos"),
+                _render_fig_block(_f("executive_kpis.png"), "Dashboard ejecutivo"),
                 _render_table_block(_t("executive_kpis.csv"), "Tabla KPIs ejecutivos"),
                 _render_fig_block("metrics_dashboard.png", "Dashboard metrics"),
             ],
@@ -1953,10 +1953,10 @@ def run_provincia(
         critical_period,
     )
     write_csv(pd.DataFrame([exec_row]), _table_path(out_base, "executive_kpis.csv"))
-    save_executive_kpi_card(
+    save_executive_kpi_dashboard(
         exec_row,
         str(_figure_path(out_base, "executive_kpis.png")),
-        f"KPIs ejecutivos — {prov_output}",
+        f"Dashboard ejecutivo — {prov_output}",
     )
     heatmap_out = _figure_path(out_base, "heatmap_canton.png")
     geo_base = Path("data") / "geo" / "provincias"

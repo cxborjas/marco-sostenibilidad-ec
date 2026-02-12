@@ -4,6 +4,7 @@ import unicodedata
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from matplotlib.patches import FancyBboxPatch
 
 # Configuración de estilo profesional
 try:
@@ -1125,6 +1126,212 @@ def save_executive_kpi_card(kpis: dict[str, object], outpath: str, title: str):
     fig.text(0.01, 0.01, "\n".join(defs), fontsize=7, ha="left", color='#718096')
     fig.tight_layout(rect=[0, 0.12, 1, 0.96])
     fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white')
+    plt.close(fig)
+
+
+def save_report_flow(outpath: str, title: str, steps: list[str] | None = None) -> None:
+    flow_steps = steps or [
+        "Resumen ejecutivo (10 KPIs)",
+        "Demografía",
+        "Estructura sectorial",
+        "Supervivencia global",
+        "Supervivencia segmentada",
+        "Anexos técnicos",
+    ]
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+
+    if not flow_steps:
+        ax.text(0.5, 0.5, "Sin pasos definidos", ha="center", va="center", fontsize=12)
+        fig.savefig(outpath, dpi=300, bbox_inches="tight", facecolor="white")
+        plt.close(fig)
+        return
+
+    n_steps = len(flow_steps)
+    y_top = 0.88
+    y_bottom = 0.12
+    spacing = (y_top - y_bottom) / max(n_steps - 1, 1)
+    box_height = min(0.11, spacing * 0.7)
+    box_width = 0.78
+    x_left = (1 - box_width) / 2
+
+    for idx, label in enumerate(flow_steps):
+        y_center = y_top - idx * spacing
+        color = COLOR_PALETTE[idx % len(COLOR_PALETTE)]
+        box = FancyBboxPatch(
+            (x_left, y_center - box_height / 2),
+            box_width,
+            box_height,
+            boxstyle="round,pad=0.02,rounding_size=0.02",
+            facecolor=color,
+            edgecolor="#ffffff",
+            linewidth=1.2,
+            alpha=0.92,
+        )
+        ax.add_patch(box)
+        ax.text(
+            0.5,
+            y_center,
+            f"{idx + 1}. {label}",
+            ha="center",
+            va="center",
+            fontsize=11,
+            fontweight="bold",
+            color="white",
+        )
+
+        if idx < n_steps - 1:
+            y_next = y_top - (idx + 1) * spacing
+            ax.annotate(
+                "",
+                xy=(0.5, y_next + box_height / 2 + 0.012),
+                xytext=(0.5, y_center - box_height / 2 - 0.012),
+                arrowprops=dict(arrowstyle="->", color="#4a5568", lw=1.6),
+            )
+
+    fig.suptitle(title, fontsize=14, fontweight="bold", color="#2d3748")
+    fig.tight_layout(rect=[0, 0, 1, 0.94])
+    fig.savefig(outpath, dpi=300, bbox_inches="tight", facecolor="white")
+    plt.close(fig)
+
+
+def save_executive_kpi_dashboard(
+    kpis: dict[str, object],
+    outpath: str,
+    title: str,
+) -> None:
+    kpi_items = [
+        ("RUC unicos", _fmt_int(kpis.get("unique_ruc_in_province")), "Universo"),
+        ("Filas raw", _fmt_int(kpis.get("raw_rows_establishments")), "Universo"),
+        ("Estab/RUC mediana", _fmt_float(kpis.get("establishments_per_ruc_median")), "Universo"),
+        ("Nacimientos 2000-2024", _fmt_int(kpis.get("births_total_2000_2024")), "Demografia"),
+        ("Cierres 2000-2024", _fmt_int(kpis.get("closures_terminal_total_2000_2024")), "Demografia"),
+        ("Neto 2000-2024", _fmt_int(kpis.get("net_total_2000_2024")), "Demografia"),
+        ("Supervivencia a 24 meses", _fmt_percent(kpis.get("S_24m")), "Supervivencia"),
+        ("Supervivencia a 60 meses", _fmt_percent(kpis.get("S_60m")), "Supervivencia"),
+        ("Mediana supervivencia", _fmt_months(kpis.get("median_survival_months")), "Supervivencia"),
+        ("Cierre temprano <24m", _fmt_percent(kpis.get("early_closure_share_lt_24m")), "Supervivencia"),
+    ]
+
+    category_colors = {
+        "Universo": "#2563eb",
+        "Demografia": "#14b8a6",
+        "Supervivencia": "#f97316",
+    }
+
+    fig, ax = plt.subplots(figsize=(14, 6.5))
+    fig.patch.set_facecolor("#f7f8fc")
+    ax.set_facecolor("#f7f8fc")
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+
+    ax.text(
+        0.02,
+        0.96,
+        title,
+        fontsize=16,
+        fontweight="bold",
+        color="#1f2937",
+        ha="left",
+        va="top",
+    )
+    window_start = kpis.get("window_start_year")
+    window_end = kpis.get("window_end_year")
+    censor_date = kpis.get("censor_date")
+    subtitle = f"Periodo {window_start}-{window_end} · Censura {censor_date}"
+    ax.text(0.02, 0.91, subtitle, fontsize=9.5, color="#6b7280", ha="left", va="top")
+    cols = 5
+    rows = 2
+    pad = 0.02
+    top_margin = 0.18
+    card_w = (1 - pad * (cols + 1)) / cols
+    card_h = (1 - top_margin - pad * (rows + 1)) / rows
+    top_y = 1 - top_margin - pad - card_h
+
+    for idx, (label, value, category) in enumerate(kpi_items):
+        row = idx // cols
+        col = idx % cols
+        x = pad + col * (card_w + pad)
+        y = top_y - row * (card_h + pad)
+        color = category_colors.get(category, "#4a5568")
+        shadow = FancyBboxPatch(
+            (x + 0.006, y - 0.008),
+            card_w,
+            card_h,
+            boxstyle="round,pad=0.012,rounding_size=0.02",
+            facecolor="#dbe0ea",
+            edgecolor="none",
+            alpha=0.35,
+            zorder=1,
+        )
+        ax.add_patch(shadow)
+
+        card = FancyBboxPatch(
+            (x, y),
+            card_w,
+            card_h,
+            boxstyle="round,pad=0.012,rounding_size=0.02",
+            facecolor="white",
+            edgecolor="#e5e7eb",
+            linewidth=1.0,
+            zorder=2,
+        )
+        ax.add_patch(card)
+
+        bar = FancyBboxPatch(
+            (x, y + card_h - 0.015),
+            card_w,
+            0.015,
+            boxstyle="round,pad=0.0,rounding_size=0.02",
+            facecolor=color,
+            edgecolor="none",
+            zorder=3,
+        )
+        ax.add_patch(bar)
+
+        ax.text(
+            x + 0.04 * card_w,
+            y + 0.72 * card_h,
+            label,
+            fontsize=9.5,
+            fontweight="600",
+            color="#4b5563",
+            ha="left",
+            va="center",
+            zorder=4,
+        )
+        ax.text(
+            x + 0.04 * card_w,
+            y + 0.38 * card_h,
+            value,
+            fontsize=13.5,
+            fontweight="bold",
+            color="#111827",
+            ha="left",
+            va="center",
+            zorder=4,
+        )
+        ax.text(
+            x + 0.04 * card_w,
+            y + 0.15 * card_h,
+            category,
+            fontsize=8.5,
+            color=color,
+            ha="left",
+            va="center",
+            zorder=4,
+        )
+
+    note = "Asociativo, no causal."
+    fig.text(0.01, 0.01, note, fontsize=8, ha="left", color="#718096")
+    fig.tight_layout(rect=[0, 0.04, 1, 1])
+    fig.savefig(outpath, dpi=300, bbox_inches="tight", facecolor="#f7f8fc")
     plt.close(fig)
 
 

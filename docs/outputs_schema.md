@@ -47,7 +47,7 @@ Estructura canonica por provincia (outputs/PROVINCIA/):
   - F11_km_agente_retencion_3cat.png
   - F12_km_especial_3cat.png
   - km_flags.png
-  - F13_executive_kpis.png
+  - F13_executive_kpis.png (dashboard ejecutivo: 10 KPIs)
   - qc_dashboard.png
   - metrics_dashboard.png
   - F14_heatmap_canton.png
