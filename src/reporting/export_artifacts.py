@@ -119,6 +119,13 @@ def _safe_div(num: float | int | None, denom: float | int | None) -> float:
         return float("nan")
     return n / d
 
+def _safe_float(value, default: float = float("nan")) -> float:
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return default
+    return out
+
 def _rate_from_demo(demo: pd.DataFrame, num_col: str) -> float:
     if demo.empty or num_col not in demo.columns or "stock_prev_n" not in demo.columns:
         return float("nan")
@@ -548,9 +555,10 @@ def _build_release_manifest(
     }
 
 
-def _build_html_report(out_base: Path) -> Path:
+def _build_html_report(out_base: Path, report_label: str | None = None) -> Path:
     report_dir = ensure_dir(out_base / "report")
     report_path = report_dir / "report.html"
+    label = report_label or out_base.name
     metrics_path = out_base / "metrics.json"
     metrics_obj = None
     if metrics_path.exists():
@@ -638,7 +646,7 @@ def _build_html_report(out_base: Path) -> Path:
 
     parts = [
         "<!doctype html>",
-        "<html><head><meta charset='utf-8'><title>Reporte Analítico - Provincia " + out_base.name + "</title>",
+        "<html><head><meta charset='utf-8'><title>Reporte Analítico - Provincia " + label + "</title>",
         "<meta name='viewport' content='width=device-width, initial-scale=1'>",
         "<script src='https://cdn.tailwindcss.com'></script>",
         "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'>",
@@ -661,7 +669,7 @@ def _build_html_report(out_base: Path) -> Path:
         "<i class='fas fa-chart-line text-5xl mr-6 opacity-80'></i>",
         "<div>",
         "<p class='text-sm text-purple-100 uppercase tracking-wide font-semibold mb-2'>Reporte Analítico Empresarial</p>",
-        f"<h1 class='text-4xl font-bold mb-2'>Provincia: {out_base.name}</h1>",
+        f"<h1 class='text-4xl font-bold mb-2'>Provincia: {label}</h1>",
         "<p class='text-purple-100'>Sistema de Rentas Internas - Análisis de Dinámica Empresarial</p>",
         "</div>",
         "</div>",
@@ -1055,6 +1063,8 @@ def run_provincia(
     ruc_prov_counts_source: str | None = None,
     ruc_prov_counts_files_n: int | None = None,
     raw_paths: list[str] | None = None,
+    canton: str | None = None,
+    out_base_override: str | Path | None = None,
 ) -> Path:
     cfg_g = _load_yaml(Path(configs_dir) / "global.yaml")
     w0 = int(cfg_g["window_start_year"])
@@ -1063,6 +1073,18 @@ def run_provincia(
     prov_input = province.strip()
     prov_filter = prov_input.upper()
     prov_output = prov_filter if prov_filter != "PROVINCIA" else "Provincia"
+
+    canton_label = None
+    canton_filter = None
+    canton_folder = None
+    if canton:
+        canton_label = str(canton).strip()
+        canton_filter = canton_label.upper().strip()
+        canton_folder = "_".join(canton_filter.split()).replace("/", "-")
+
+    display_label = prov_output
+    if canton_label:
+        display_label = f"{prov_output} / {canton_label}"
 
     if raw_path:
         rp = Path(raw_path)
@@ -1079,14 +1101,19 @@ def run_provincia(
     else:
         print("Limpieza previa: no se encontraron carpetas __pycache__.", flush=True)
 
-    out_base = Path("outputs") / prov_output
+    if out_base_override:
+        out_base = Path(out_base_override)
+    else:
+        out_base = Path("outputs") / prov_output
+        if canton_folder:
+            out_base = out_base / canton_folder
     ensure_dir(out_base / "qc")
     ensure_dir(out_base / "data")
     ensure_dir(out_base / "tables")
     ensure_dir(out_base / "figures")
 
     progress = _ProgressPrinter(_PIPELINE_STAGES)
-    progress.announce(prov_output)
+    progress.announce(display_label)
     tracelog = TraceLog(out_base / "qc" / "trace_log.jsonl")
 
     raw = load_raw(str(rp))
@@ -1147,6 +1174,18 @@ def run_provincia(
     else:
         tracelog.event("filter_province", "DESCRIPCION_PROVINCIA_EST ausente", {"status": "missing_column"})
         filter_prov_msg = "Columna DESCRIPCION_PROVINCIA_EST no disponible; se omite filtro"
+
+    if canton_filter:
+        if "DESCRIPCION_CANTON_EST" in df.columns:
+            before = len(df)
+            canton_series = df["DESCRIPCION_CANTON_EST"].astype("string").fillna("").str.strip().str.upper()
+            df = df[canton_series == canton_filter].copy()
+            tracelog.event("filter_canton", f"DESCRIPCION_CANTON_EST=={canton_filter}", {"before": before, "after": len(df)})
+            filter_canton_msg = f"{before:,} -> {len(df):,} registros en canton {canton_filter}"
+        else:
+            tracelog.event("filter_canton", "DESCRIPCION_CANTON_EST ausente", {"status": "missing_column"})
+            filter_canton_msg = "Columna DESCRIPCION_CANTON_EST no disponible; se omite filtro"
+        filter_prov_msg = f"{filter_prov_msg} · {filter_canton_msg}"
     progress.step(filter_prov_msg)
 
     exclude_codes = cfg_g.get("exclude_codes") or []
@@ -1376,7 +1415,7 @@ def run_provincia(
         qc1,
         qc2,
         str(_figure_path(out_base, "qc_dashboard.png")),
-        f"QC resumen — {prov_output}",
+        f"QC resumen — {display_label}",
         qc_extra={
             "establishments_per_ruc": est_per_ruc,
             "multi_province": multi_prov_stats,
@@ -1480,7 +1519,7 @@ def run_provincia(
     save_line_demografia(
         demo,
         str(_figure_path(out_base, "demografia_linea_tiempo.png")),
-        f"Creacion Vs Cierre - {prov_output} ({w0}-{w1})",
+        f"Creacion Vs Cierre - {display_label} ({w0}-{w1})",
         window_start=w0,
         window_end=w1,
         ruc_valid_start=ruc_valid_start,
@@ -1488,34 +1527,34 @@ def run_provincia(
     save_bar_cohortes(
         coh,
         str(_figure_path(out_base, "cohortes.png")),
-        f"Cohortes quinquenales — {prov_output}",
+        f"Cohortes quinquenales — {display_label}",
     )
     save_bar_cantones(
         cant,
         str(_figure_path(out_base, "cantones_top10.png")),
-        f"Cantones top 10 — {prov_output}",
+        f"Cantones top 10 — {display_label}",
     )
     save_bar_macro(
         macro,
         str(_figure_path(out_base, "macro_sectores.png")),
-        f"Macro-sectores CIIU — {prov_output}",
+        f"Macro-sectores CIIU — {display_label}",
     )
     save_bar_actividades(
         act,
         str(_figure_path(out_base, "actividades_top10.png")),
-        f"Top actividades (CIIU) — {prov_output}",
+        f"Top actividades (CIIU) — {display_label}",
     )
     window_max_months = (w1 - w0 + 1) * 12
     save_hist_duracion_cierres(
         ruc,
         str(_figure_path(out_base, "hist_duracion_cierres.png")),
-        f"Duración en cierres observados — {prov_output}",
+        f"Duración en cierres observados — {display_label}",
         max_months=window_max_months,
     )
     save_km_plot(
         km,
         str(_figure_path(out_base, "km_general.png")),
-        f"Kaplan–Meier — {prov_output}",
+        f"Kaplan–Meier — {display_label}",
         counts={
             "n_total": int(surv_kpis.get("n_total") or 0),
             "events_n": int(surv_kpis.get("events_n") or 0),
@@ -1552,7 +1591,7 @@ def run_provincia(
         save_km_multi(
             km_sector,
             str(_figure_path(out_base, "km_sector.png")),
-            f"KM por macro-sector — {prov_output}",
+            f"KM por macro-sector — {display_label}",
             max_months=window_max_months,
             top_n=5,
             label_prefix="Macro sector",
@@ -1570,7 +1609,7 @@ def run_provincia(
         save_km_multi(
             km_canton,
             str(_figure_path(out_base, "km_canton_topN.png")),
-            f"KM por cantón — {prov_output}",
+            f"KM por cantón — {display_label}",
             max_months=window_max_months,
             top_n=5,
         )
@@ -1590,7 +1629,7 @@ def run_provincia(
                 tmp_flag = tab_flag.copy()
                 tmp_flag.insert(0, "flag", flag)
                 km_flags_tables.append(tmp_flag)
-                title = f"KM por {flag} — {prov_output}"
+                title = f"KM por {flag} — {display_label}"
                 fill = True
                 extra_note = None
                 group_stats = None
@@ -1607,7 +1646,7 @@ def run_provincia(
                 fill_alpha = 0.15
 
                 if flag == "obligado_3cat":
-                    title = f"Supervivencia por Obligación (Sí vs No) — {prov_output}"
+                    title = f"Supervivencia por Obligación (Sí vs No) — {display_label}"
                     fill = True
                     show_last_point = False
                     max_months_flag = window_max_months
@@ -1685,7 +1724,7 @@ def run_provincia(
                     fill_alpha = 0.08
 
                 elif flag == "agente_retencion_3cat":
-                    title = f"Supervivencia por Agente de Retención (Sí vs No) — {prov_output}"
+                    title = f"Supervivencia por Agente de Retención (Sí vs No) — {display_label}"
                     fill = True
                     fill_alpha = 0.08
                     max_months_flag = min(window_max_months, 300)
@@ -1750,7 +1789,7 @@ def run_provincia(
                     legend_only_suffix = "sin curva"
 
                 elif flag == "especial_3cat":
-                    title = f"Supervivencia por Contribuyente Especial (Sí vs No) — {prov_output}"
+                    title = f"Supervivencia por Contribuyente Especial (Sí vs No) — {display_label}"
                     fill = True
                     fill_alpha = 0.08
                     max_months_flag = min(window_max_months, 300)
@@ -1884,7 +1923,7 @@ def run_provincia(
         save_km_multi(
             km_scale,
             str(_figure_path(out_base, "km_escala.png")),
-            f"Supervivencia por escala — {prov_output}",
+            f"Supervivencia por escala — {display_label}",
             max_months=window_max_months,
             fill=True,
             fill_alpha=0.08,
@@ -1916,7 +1955,7 @@ def run_provincia(
             "no_informado_share",
         ])
     write_csv(km_flags_table, _table_path(out_base, "km_flags.csv"))
-    save_km_flags(km_flags_map, str(_figure_path(out_base, "km_flags.png")), f"KM por banderas - {prov_output}")
+    save_km_flags(km_flags_map, str(_figure_path(out_base, "km_flags.png")), f"KM por banderas - {display_label}")
     progress.step(
         f"Comparativas generadas ({comparativa_tables} tablas / {comparativa_figures} figuras)"
     )
@@ -1941,7 +1980,7 @@ def run_provincia(
         leading_canton = {"name": "NA", "ruc_share": float("nan"), "establishments_share": float("nan")}
 
     missingness = qc1.get("missingness", {}) or {}
-    missingness_by_column = {k: float(v) for k, v in missingness.items()}
+    missingness_by_column = {k: _safe_float(v) for k, v in missingness.items()}
     no_informado = {
         "OBLIGADO": _no_informado_share(df["OBLIGADO"]) if "OBLIGADO" in df.columns else float("nan"),
         "AGENTE_RETENCION": _no_informado_share(df["AGENTE_RETENCION"]) if "AGENTE_RETENCION" in df.columns else float("nan"),
@@ -1968,7 +2007,7 @@ def run_provincia(
         for col in critical_present:
             mask = _missing_mask(df[col])
             miss_any = mask if miss_any is None else (miss_any | mask)
-        missing_critical["any_share"] = float(miss_any.mean()) if miss_any is not None else float("nan")
+        missing_critical["any_share"] = _safe_float(miss_any.mean()) if miss_any is not None else float("nan")
     else:
         missing_critical["any_share"] = float("nan")
 
@@ -2024,6 +2063,7 @@ def run_provincia(
         "run": {
             "project": "radiografia_empresarial",
             "province": prov_output,
+            "canton": canton_label,
             "public_mode": bool(public_mode),
             "window_start_year": w0,
             "window_end_year": w1,
@@ -2149,11 +2189,11 @@ def run_provincia(
     save_metrics_dashboard(
         metrics,
         str(_figure_path(out_base, "metrics_dashboard.png")),
-        f"Metrics resumen — {prov_output}",
+        f"Metrics resumen — {display_label}",
     )
 
     exec_row = _executive_kpis(
-        prov_output,
+        display_label,
         qc1,
         qc2,
         demo_sum,
@@ -2177,7 +2217,7 @@ def run_provincia(
     save_executive_kpi_dashboard(
         exec_row,
         str(_figure_path(out_base, "executive_kpis.png")),
-        f"Dashboard ejecutivo — {prov_output}",
+        f"Dashboard ejecutivo — {display_label}",
     )
     heatmap_out = _figure_path(out_base, "heatmap_canton.png")
     geo_base = Path("data") / "geo" / "provincias"
@@ -2196,13 +2236,13 @@ def run_provincia(
             str(heatmap_canton_path),
             str(geo_path),
             str(heatmap_out),
-            f"Heatmap cantonal — {prov_output}",
+            f"Heatmap cantonal — {display_label}",
             province=prov_filter,
         )
     else:
         save_heatmap_placeholder(
             str(heatmap_out),
-            f"Heatmap cantonal — {prov_output}",
+            f"Heatmap cantonal — {display_label}",
         )
     legacy_heatmap_fig = out_base / "figures" / "heatmap_canton.png"
     if legacy_heatmap_fig != heatmap_out and legacy_heatmap_fig.exists():
@@ -2210,7 +2250,7 @@ def run_provincia(
             legacy_heatmap_fig.unlink()
         except OSError:
             pass
-    report_path = _build_html_report(out_base)
+    report_path = _build_html_report(out_base, report_label=display_label)
     progress.step("metrics.json y executive_kpis.csv generados")
 
     tracelog.event("done", "artifacts exported", {"outputs": str(out_base), "report": str(report_path)})

@@ -1672,7 +1672,8 @@ def save_qc_dashboard(qc_raw: dict, qc_ruc: dict, outpath: str, title: str, qc_e
         _render_table(axes[2], ruc_rows_table, "QC RUC")
     _render_table(axes[3], missing_rows, "Top faltantes")
 
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    # `tight_layout` emite warning con esta combinación de tablas/axes.
+    fig.subplots_adjust(left=0.04, right=0.98, bottom=0.04, top=0.93, wspace=0.25, hspace=0.35)
     fig.savefig(outpath, dpi=300, bbox_inches='tight', facecolor='white', edgecolor='none')
     plt.close(fig)
 
@@ -1958,6 +1959,7 @@ def save_metrics_dashboard(metrics: dict, outpath: str, title: str) -> None:
         footer_parts.append(f"Macro líder (completo): {lead_label_full}")
     footer = " · ".join(footer_parts)
     fig.text(0.01, 0.01, footer, fontsize=7, ha="left", color="#718096")
-    fig.tight_layout(rect=[0, 0.03, 1, 0.98])
+    # `tight_layout` no es compatible con todos los ejes de este dashboard.
+    fig.subplots_adjust(left=0.04, right=0.98, bottom=0.06, top=0.93, wspace=0.28, hspace=0.35)
     fig.savefig(outpath, dpi=300, bbox_inches="tight", facecolor="#f7f8fc", edgecolor="none")
     plt.close(fig)

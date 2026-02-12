@@ -1,6 +1,16 @@
 from __future__ import annotations
 import pandas as pd
 
+
+def _safe_float(value, default: float = float("nan")) -> float:
+    """Convert metric values to float tolerating pd.NA / empty aggregations."""
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return default
+    return out
+
+
 def missingness_by_column(df: pd.DataFrame) -> dict:
     out = {}
     for c in df.columns:
@@ -8,9 +18,9 @@ def missingness_by_column(df: pd.DataFrame) -> dict:
         if pd.api.types.is_object_dtype(s) or pd.api.types.is_string_dtype(s):
             ss = s.astype("string")
             missing = ss.isna() | (ss.str.strip() == "")
-            out[c] = float(missing.mean())
+            out[c] = _safe_float(missing.mean())
         else:
-            out[c] = float(s.isna().mean())
+            out[c] = _safe_float(s.isna().mean())
     return out
 
 
@@ -27,19 +37,19 @@ def qc_raw(df: pd.DataFrame, province: str) -> dict:
     def share_in(col, allowed):
         if col not in df.columns: return None
         s = df[col].astype("string")
-        return float(s.isin(list(allowed)).mean())
+        return _safe_float(s.isin(list(allowed)).mean())
 
     def flag_share(col):
         if col not in df.columns:
             return None
         s = df[col].astype("string").fillna("").str.strip().str.upper()
-        return float(s.isin({"S", "N", ""}).mean())
+        return _safe_float(s.isin({"S", "N", ""}).mean())
 
     def non_empty_share(col):
         if col not in df.columns:
             return None
         s = df[col].astype("string").fillna("").str.strip()
-        return float((s != "").mean())
+        return _safe_float((s != "").mean())
 
     res = {
         "raw_rows": int(len(df)),

@@ -163,6 +163,31 @@ def collapse_to_ruc(df_prov: pd.DataFrame, censor_date: date, trace: dict | None
         rows.append(rec)
 
     out = pd.DataFrame(rows)
+    if out.empty:
+        # Preserve expected schema when no RUC survives filters.
+        out = pd.DataFrame(
+            columns=[
+                "RUC",
+                "start_date",
+                "suspension_candidate",
+                "restart_date",
+                "end_date",
+                "event",
+                "establishments_count",
+                "main_rule",
+                "main_province",
+                "main_canton",
+                "main_parish",
+                "ciiu_code_main",
+                "activity_main",
+                "ESTADO_CONTRIBUYENTE",
+                "obligado_3cat",
+                "agente_retencion_3cat",
+                "especial_3cat",
+                "macro_sector",
+                "macro_sector_label",
+            ]
+        )
     out["duration_months"] = months_between(out["start_date"], out["end_date"])
     out["start_year"] = year_of(out["start_date"])
     return out
