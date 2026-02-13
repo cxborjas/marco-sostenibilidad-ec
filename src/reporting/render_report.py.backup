@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 from datetime import date, datetime, timezone
 from pathlib import Path
 from time import perf_counter
@@ -46,20 +46,20 @@ from src.viz.figures import (
 
 _PIPELINE_STAGES = [
     "Carga del raw",
-    "Normalización de campos",
+    "NormalizaciÃ³n de campos",
     "Filtro universo (SOCIEDAD)",
     "Filtro provincia",
     "Filtro codigos omitidos",
     "QC raw",
     "Colapso a RUC",
     "QC RUC",
-    "Demografía y cohortes",
-    "Cantones y geografía",
+    "DemografÃ­a y cohortes",
+    "Cantones y geografÃ­a",
     "Macro sectores y actividades",
     "KPIs de supervivencia",
     "Figuras base",
     "Comparativas / KM estratificado",
-    "Métricas ejecutivas",
+    "MÃ©tricas ejecutivas",
 ]
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -110,9 +110,9 @@ class _ProgressPrinter:
             base = self.stages[self.completed - 1]
         else:
             base = f"Paso {self.completed}"
-        detail = f"{base} — {extra}" if extra else base
+        detail = f"{base} â€” {extra}" if extra else base
         print(
-            f"[{pct:5.1f}% · {self.completed}/{self.total}] {detail} | tiempo {_format_seconds(elapsed)} · ETA {_format_seconds(remaining)}",
+            f"[{pct:5.1f}% Â· {self.completed}/{self.total}] {detail} | tiempo {_format_seconds(elapsed)} Â· ETA {_format_seconds(remaining)}",
             flush=True,
         )
 
@@ -278,7 +278,7 @@ def _number_outputs(out_base: Path) -> None:
         ("02", "cantones_top10.csv", "cantones_top10.png", "Cantones top 10"),
         ("03", "macro_sectores.csv", "macro_sectores.png", "Macro-sectores CIIU"),
         ("04", "actividades_top10.csv", "actividades_top10.png", "Top actividades"),
-        ("05", "supervivencia_kpis.csv", "km_general.png", "Kaplan–Meier general"),
+        ("05", "supervivencia_kpis.csv", "km_general.png", "Kaplanâ€“Meier general"),
         ("06", "periodo_critico_bins.csv", "hist_duracion_cierres.png", "Periodo critico y duraciones"),
         ("07", "comparativa_sector.csv", "km_sector.png", "Comparativa sector"),
         ("08", "comparativa_canton_top5.csv", "km_canton_topN.png", "Comparativa canton"),
@@ -495,7 +495,7 @@ def _build_html_report(out_base: Path) -> Path:
 
     parts = [
         "<!doctype html>",
-        "<html><head><meta charset='utf-8'><title>Reporte Analítico - Provincia " + out_base.name + "</title>",
+        "<html><head><meta charset='utf-8'><title>Reporte AnalÃ­tico - Provincia " + out_base.name + "</title>",
         "<meta name='viewport' content='width=device-width, initial-scale=1'>",
         "<script src='https://cdn.tailwindcss.com'></script>",
         "<link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'>",
@@ -517,9 +517,9 @@ def _build_html_report(out_base: Path) -> Path:
         "<div class='flex items-center'>",
         "<i class='fas fa-chart-line text-5xl mr-6 opacity-80'></i>",
         "<div>",
-        "<p class='text-sm text-purple-100 uppercase tracking-wide font-semibold mb-2'>Reporte Analítico Empresarial</p>",
+        "<p class='text-sm text-purple-100 uppercase tracking-wide font-semibold mb-2'>Reporte AnalÃ­tico Empresarial</p>",
         f"<h1 class='text-4xl font-bold mb-2'>Provincia: {out_base.name}</h1>",
-        "<p class='text-purple-100'>Sistema de Rentas Internas - Análisis de Dinámica Empresarial</p>",
+        "<p class='text-purple-100'>Sistema de Rentas Internas - AnÃ¡lisis de DinÃ¡mica Empresarial</p>",
         "</div>",
         "</div>",
         "</header>",
@@ -528,22 +528,22 @@ def _build_html_report(out_base: Path) -> Path:
     metodologia_cards = "".join(
         [
             "<div class='metric-card bg-gradient-to-br from-blue-50 to-white rounded-xl shadow-md border border-blue-200 p-5'>"
-            "<h3 class='font-bold text-blue-900 mb-2 flex items-center'><i class='fas fa-microscope text-blue-600 mr-2'></i>Unidad de análisis</h3>"
-            "<p class='text-sm text-slate-700 leading-relaxed'>Este reporte colapsa establecimientos a nivel RUC para medir la dinámica de sociedades. "
-            "La fecha de inicio corresponde a la mínima fecha observada; la suspensión definitiva a la máxima; y el reinicio a la máxima "
-            "para detectar reactivaciones. Variables administrativas se agregan de forma conservadora y se mantiene 'No informado' cuando hay vacíos.</p>"
+            "<h3 class='font-bold text-blue-900 mb-2 flex items-center'><i class='fas fa-microscope text-blue-600 mr-2'></i>Unidad de anÃ¡lisis</h3>"
+            "<p class='text-sm text-slate-700 leading-relaxed'>Este reporte colapsa establecimientos a nivel RUC para medir la dinÃ¡mica de sociedades. "
+            "La fecha de inicio corresponde a la mÃ­nima fecha observada; la suspensiÃ³n definitiva a la mÃ¡xima; y el reinicio a la mÃ¡xima "
+            "para detectar reactivaciones. Variables administrativas se agregan de forma conservadora y se mantiene 'No informado' cuando hay vacÃ­os.</p>"
             "</div>",
             "<div class='metric-card bg-gradient-to-br from-purple-50 to-white rounded-xl shadow-md border border-purple-200 p-5'>"
             "<h3 class='font-bold text-purple-900 mb-2 flex items-center'><i class='fas fa-clock text-purple-600 mr-2'></i>Ventana temporal y corte</h3>"
-            "<p class='text-sm text-slate-700 leading-relaxed'>La ventana de observación es 2000-2024 y el corte es 31/12/2024. "
-            "Si no se observa una suspensión definitiva terminal (sin reinicio posterior), la sociedad se considera censurada al 31/12/2024. "
-            "La duración observada es inicio a suspensión definitiva o inicio a corte.</p>"
+            "<p class='text-sm text-slate-700 leading-relaxed'>La ventana de observaciÃ³n es 2000-2024 y el corte es 31/12/2024. "
+            "Si no se observa una suspensiÃ³n definitiva terminal (sin reinicio posterior), la sociedad se considera censurada al 31/12/2024. "
+            "La duraciÃ³n observada es inicio a suspensiÃ³n definitiva o inicio a corte.</p>"
             "</div>",
             "<div class='metric-card bg-gradient-to-br from-green-50 to-white rounded-xl shadow-md border border-green-200 p-5'>"
             "<h3 class='font-bold text-green-900 mb-2 flex items-center'><i class='fas fa-database text-green-600 mr-2'></i>Fuente y dominios</h3>"
-            "<p class='text-sm text-slate-700 leading-relaxed'>La fuente primaria es el catastro público del RUC del SRI. "
-            "Se utiliza la base \"Catastro RUC por provincia – Personas Naturales y Sociedades\". "
-            "Los dominios se preservan con normalización mínima (mayúsculas y recorte). Vacíos se recodifican como 'No informado'.</p>"
+            "<p class='text-sm text-slate-700 leading-relaxed'>La fuente primaria es el catastro pÃºblico del RUC del SRI. "
+            "Se utiliza la base \"Catastro RUC por provincia â€“ Personas Naturales y Sociedades\". "
+            "Los dominios se preservan con normalizaciÃ³n mÃ­nima (mayÃºsculas y recorte). VacÃ­os se recodifican como 'No informado'.</p>"
             "</div>",
             "<div class='metric-card bg-gradient-to-br from-yellow-50 to-white rounded-xl shadow-md border border-yellow-200 p-5'>"
             "<h3 class='font-bold text-yellow-900 mb-2 flex items-center'><i class='fas fa-exclamation-triangle text-yellow-600 mr-2'></i>Inconsistencias esperables</h3>"
@@ -557,7 +557,7 @@ def _build_html_report(out_base: Path) -> Path:
             "</div>",
         ]
     )
-    _section("Metodología", f"<div class='grid md:grid-cols-2 gap-4'>{metodologia_cards}</div>", "fa-book-open")
+    _section("MetodologÃ­a", f"<div class='grid md:grid-cols-2 gap-4'>{metodologia_cards}</div>", "fa-book-open")
 
     demografia_blocks = "".join(
         filter(
@@ -568,7 +568,7 @@ def _build_html_report(out_base: Path) -> Path:
             ],
         )
     )
-    _section("Demografía", f"<div class='grid lg:grid-cols-2 gap-4'>{demografia_blocks}</div>", "fa-users")
+    _section("DemografÃ­a", f"<div class='grid lg:grid-cols-2 gap-4'>{demografia_blocks}</div>", "fa-users")
 
     cohortes_blocks = "".join(
         filter(
@@ -592,7 +592,7 @@ def _build_html_report(out_base: Path) -> Path:
             ],
         )
     )
-    _section("Geografía", f"<div class='grid lg:grid-cols-2 gap-4'>{geo_blocks}</div>", "fa-map-location-dot")
+    _section("GeografÃ­a", f"<div class='grid lg:grid-cols-2 gap-4'>{geo_blocks}</div>", "fa-map-location-dot")
 
     sector_blocks = "".join(
         filter(
@@ -611,7 +611,7 @@ def _build_html_report(out_base: Path) -> Path:
         filter(
             None,
             [
-                _render_fig_block(_f("km_general.png"), "Kaplan–Meier"),
+                _render_fig_block(_f("km_general.png"), "Kaplanâ€“Meier"),
                 _render_table_block(_t("supervivencia_kpis.csv"), "KPIs supervivencia"),
                 _render_fig_block(_f("hist_duracion_cierres.png"), "Duracion de cierres"),
                 _render_table_block(_t("periodo_critico_bins.csv"), "Periodo critico por tramos"),
@@ -717,13 +717,13 @@ def _build_html_report(out_base: Path) -> Path:
     if anexos_blocks:
         _section("Anexos", "".join(anexos_blocks), "fa-paperclip")
 
-    # Pie de página
+    # Pie de pÃ¡gina
     parts.append(
         "<footer class='mt-12 bg-gradient-to-r from-slate-100 to-slate-50 rounded-xl shadow-md border border-slate-200 p-6 text-center'>"
         "<div class='space-y-2'>"
         f"<p class='text-sm text-slate-600'><i class='fas fa-calendar-alt mr-2'></i>Reporte generado: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</p>"
         "<p class='text-sm text-slate-600'><i class='fas fa-database mr-2'></i>Fuente: Sistema de Rentas Internas (SRI) - Catastro RUC</p>"
-        "<p class='text-xs text-slate-500 mt-4'>Este reporte es de carácter técnico y analítico. Los datos presentados corresponden al procesamiento del catastro público del RUC.</p>"
+        "<p class='text-xs text-slate-500 mt-4'>Este reporte es de carÃ¡cter tÃ©cnico y analÃ­tico. Los datos presentados corresponden al procesamiento del catastro pÃºblico del RUC.</p>"
         "</div>"
         "</footer>"
     )
@@ -938,7 +938,7 @@ def run_provincia(
     )
     if date_audit:
         tracelog.event("date_parse_audit", "date parse audit", date_audit)
-    progress.step(f"{len(raw):,} filas leídas desde {rp}")
+    progress.step(f"{len(raw):,} filas leÃ­das desde {rp}")
 
     raw_n = normalize(raw)
     tracelog.event("normalize", "normalized strings and dates", {"rows": len(raw_n)})
@@ -1031,7 +1031,7 @@ def run_provincia(
     write_json(out_base / "qc" / "qc_raw.json", qc1)
     if not public_mode:
         write_csv(df, out_base / "data" / "raw_filtrado.csv")
-    progress.step(f"QC raw listo (RUC únicos: {qc1.get('unique_ruc', 'NA')})")
+    progress.step(f"QC raw listo (RUC Ãºnicos: {qc1.get('unique_ruc', 'NA')})")
 
     est_per_ruc = establishments_per_ruc_summary(df)
     multi_prov_stats = {
@@ -1159,7 +1159,7 @@ def run_provincia(
         qc1,
         qc2,
         str(out_base / "figures" / "qc_dashboard.png"),
-        f"QC resumen — {prov_output}",
+        f"QC resumen â€” {prov_output}",
         qc_extra={
             "establishments_per_ruc": est_per_ruc,
             "multi_province": multi_prov_stats,
@@ -1175,7 +1175,7 @@ def run_provincia(
 
     coh = cohortes(ruc, cfg_g["cohorts_5y"])
     write_csv(coh, out_base / "tables" / "cohortes.csv")
-    progress.step(f"Demografía ({len(demo)} filas) y cohortes ({len(coh)} filas) listos")
+    progress.step(f"DemografÃ­a ({len(demo)} filas) y cohortes ({len(coh)} filas) listos")
 
     cant = cantones_topN_from_raw(df, ruc_main=ruc, topN=int(cfg_g["topN_cantones"]))
     write_csv(cant, _table_path(out_base, "cantones_top10.csv"))
@@ -1190,7 +1190,7 @@ def run_provincia(
                 legacy_heatmap_table.unlink()
             except OSError:
                 pass
-    progress.step(f"Cantones top calculados ({len(cant)} filas) y métricas de concentración listas")
+    progress.step(f"Cantones top calculados ({len(cant)} filas) y mÃ©tricas de concentraciÃ³n listas")
 
     macro = macro_sectores(ruc)
     write_csv(macro, _table_path(out_base, "macro_sectores.csv"))
@@ -1264,32 +1264,32 @@ def run_provincia(
     save_bar_cohortes(
         coh,
         str(_figure_path(out_base, "cohortes.png")),
-        f"Cohortes quinquenales — {prov_output}",
+        f"Cohortes quinquenales â€” {prov_output}",
     )
     save_bar_cantones(
         cant,
         str(_figure_path(out_base, "cantones_top10.png")),
-        f"Cantones top 10 — {prov_output}",
+        f"Cantones top 10 â€” {prov_output}",
     )
     save_bar_macro(
         macro,
         str(_figure_path(out_base, "macro_sectores.png")),
-        f"Macro-sectores CIIU — {prov_output}",
+        f"Macro-sectores CIIU â€” {prov_output}",
     )
     save_bar_actividades(
         act,
         str(_figure_path(out_base, "actividades_top10.png")),
-        f"Top actividades (CIIU) — {prov_output}",
+        f"Top actividades (CIIU) â€” {prov_output}",
     )
     save_hist_duracion_cierres(
         ruc,
         str(_figure_path(out_base, "hist_duracion_cierres.png")),
-        f"Duración en cierres observados — {prov_output}",
+        f"DuraciÃ³n en cierres observados â€” {prov_output}",
     )
     save_km_plot(
         km,
         str(_figure_path(out_base, "km_general.png")),
-        f"Kaplan–Meier — {prov_output}",
+        f"Kaplanâ€“Meier â€” {prov_output}",
         counts={
             "n_total": int(surv_kpis.get("n_total") or 0),
             "events_n": int(surv_kpis.get("events_n") or 0),
@@ -1324,7 +1324,7 @@ def run_provincia(
         save_km_multi(
             km_sector,
             str(_figure_path(out_base, "km_sector.png")),
-            f"KM por macro-sector — {prov_output}",
+            f"KM por macro-sector â€” {prov_output}",
         )
         comparativa_figures += 1
 
@@ -1338,7 +1338,7 @@ def run_provincia(
         save_km_multi(
             km_canton,
             str(_figure_path(out_base, "km_canton_topN.png")),
-            f"KM por cantón (top5+resto) — {prov_output}",
+            f"KM por cantÃ³n (top5+resto) â€” {prov_output}",
         )
         comparativa_figures += 1
 
@@ -1355,7 +1355,7 @@ def run_provincia(
                 save_km_multi(
                     km_flag,
                     str(_figure_path(out_base, f"km_{flag}.png")),
-                    f"KM por {flag} — {prov_output}",
+                    f"KM por {flag} â€” {prov_output}",
                 )
                 comparativa_figures += 1
                 km_flags_map[flag] = km_flag
@@ -1370,10 +1370,10 @@ def run_provincia(
         save_km_multi(
             km_scale,
             str(_figure_path(out_base, "km_escala.png")),
-            f"KM por escala — {prov_output}",
+            f"KM por escala â€” {prov_output}",
         )
         comparativa_figures += 1
-    save_km_flags(km_flags_map, str(out_base / "figures" / "km_flags.png"), f"KM por banderas — {prov_output}")
+    save_km_flags(km_flags_map, str(out_base / "figures" / "km_flags.png"), f"KM por banderas â€” {prov_output}")
     progress.step(
         f"Comparativas generadas ({comparativa_tables} tablas / {comparativa_figures} figuras)"
     )
@@ -1528,7 +1528,7 @@ def run_provincia(
     save_metrics_dashboard(
         metrics,
         str(out_base / "figures" / "metrics_dashboard.png"),
-        f"Metrics resumen — {prov_output}",
+        f"Metrics resumen â€” {prov_output}",
     )
 
     exec_row = _executive_kpis(
@@ -1553,7 +1553,7 @@ def run_provincia(
     save_executive_kpi_card(
         exec_row,
         str(_figure_path(out_base, "executive_kpis.png")),
-        f"KPIs ejecutivos — {prov_output}",
+        f"KPIs ejecutivos â€” {prov_output}",
     )
     heatmap_out = _figure_path(out_base, "heatmap_canton.png")
     geo_base = Path("data") / "geo" / "provincias"
@@ -1572,13 +1572,13 @@ def run_provincia(
             str(heatmap_canton_path),
             str(geo_path),
             str(heatmap_out),
-            f"Heatmap cantonal — {prov_output}",
+            f"Heatmap cantonal â€” {prov_output}",
             province=prov_filter,
         )
     else:
         save_heatmap_placeholder(
             str(heatmap_out),
-            f"Heatmap cantonal — {prov_output}",
+            f"Heatmap cantonal â€” {prov_output}",
         )
     legacy_heatmap_fig = out_base / "figures" / "heatmap_canton.png"
     if legacy_heatmap_fig != heatmap_out and legacy_heatmap_fig.exists():
@@ -1605,12 +1605,12 @@ def _discover_provinces_from_raw(raw_dir: str) -> list[str]:
     return provs
 
 def main():
-    ap = argparse.ArgumentParser(description="Pipeline reproducible por provincia (ETL+QC+Métricas+Figuras).")
+    ap = argparse.ArgumentParser(description="Pipeline reproducible por provincia (ETL+QC+MÃ©tricas+Figuras).")
     ap.add_argument("--province", help="Provincia (ej: PICHINCHA). Si no se pasa, use --all.")
     ap.add_argument("--all", action="store_true", help="Ejecuta todas las provincias detectadas en raw_dir.")
     ap.add_argument("--configs", default="configs", help="Carpeta configs/ (global.yaml).")
     ap.add_argument("--raw_dir", default="data/raw", help="Carpeta de raws (SRI_RUC_<Provincia>.csv).")
-    ap.add_argument("--raw_path", default=None, help="Ruta exacta al raw (sobrescribe raw_dir+convención).")
+    ap.add_argument("--raw_path", default=None, help="Ruta exacta al raw (sobrescribe raw_dir+convenciÃ³n).")
     ap.add_argument("--public", action="store_true", help="Modo publico: no exporta data/raw_filtrado ni ruc_master.")
     ap.add_argument("--ruc_prov_counts", default=None, help="CSV/Parquet con conteo de provincias por RUC.")
     args = ap.parse_args()
@@ -1685,7 +1685,7 @@ def main():
         manifest = _build_release_manifest(
             outputs_root,
             provinces_run,
-            "python -m src.reporting.export_artifacts",
+            "python -m src.reporting.render_report",
             args.configs,
             args.raw_dir,
             args.public,
@@ -1714,7 +1714,7 @@ def main():
     manifest = _build_release_manifest(
         outputs_root,
         provinces_run,
-        "python -m src.reporting.export_artifacts",
+        "python -m src.reporting.render_report",
         args.configs,
         args.raw_dir,
         args.public,
@@ -1726,3 +1726,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

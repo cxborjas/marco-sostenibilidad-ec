@@ -34,7 +34,7 @@ def process_single_province(args: tuple) -> dict[str, Any]:
         if str(root) not in sys.path:
             sys.path.insert(0, str(root))
         
-        from src.reporting.export_artifacts import run_provincia
+        from src.reporting.render_report import run_provincia
         
         print(f"🔄 Iniciando procesamiento de {provincia}...")
         

@@ -81,7 +81,7 @@ Las salidas incluyen demografía, geografía, estructura sectorial y supervivenc
 ## Cuadernos y modos de ejecucion
 - [notebooks/01_run_provincia.ipynb](notebooks/01_run_provincia.ipynb): corrida por provincia (single o batch).
 - [notebooks/02_run_cantones.ipynb](notebooks/02_run_cantones.ipynb): corrida interactiva por provincia, rango de años y uno o varios cantones.
-- CLI: `python -m src.reporting.export_artifacts --province PICHINCHA --raw_dir data/raw`.
+- CLI: `python -m src.reporting.render_report --province PICHINCHA --raw_dir data/raw`.
 
 ## Estructura del proyecto (resumen)
 - `configs/`: parametros globales, provincias y comparativas.
@@ -133,7 +133,7 @@ Para más detalles técnicos y ejemplos avanzados, consulta la [documentación c
 ## Ejecución (local y Colab)
 - Local (VSCode/Jupyter): `conda env create -f environment.yml` o `python -m venv .venv && pip install -r requirements.txt`.
 - Colab: clona el repo y usa `pip install -r requirements.txt`.
-- Ejecución: [notebooks/01_run_provincia.ipynb](notebooks/01_run_provincia.ipynb), [notebooks/02_run_cantones.ipynb](notebooks/02_run_cantones.ipynb) o `python -m src.reporting.export_artifacts --province PICHINCHA --raw_dir data/raw`.
+- Ejecución: [notebooks/01_run_provincia.ipynb](notebooks/01_run_provincia.ipynb), [notebooks/02_run_cantones.ipynb](notebooks/02_run_cantones.ipynb) o `python -m src.reporting.render_report --province PICHINCHA --raw_dir data/raw`.
 - Ver detalle de estructura de datos en [data/README.md](data/README.md).
 
 ## Outputs estandarizados

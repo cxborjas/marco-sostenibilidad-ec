@@ -2490,7 +2490,7 @@ def main():
         manifest = _build_release_manifest(
             outputs_root,
             provinces_run,
-            "python -m src.reporting.export_artifacts",
+            "python -m src.reporting.render_report",
             args.configs,
             args.raw_dir,
             args.public,
@@ -2519,7 +2519,7 @@ def main():
     manifest = _build_release_manifest(
         outputs_root,
         provinces_run,
-        "python -m src.reporting.export_artifacts",
+        "python -m src.reporting.render_report",
         args.configs,
         args.raw_dir,
         args.public,
