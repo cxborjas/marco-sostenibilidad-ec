@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 The format is based on Keep a Changelog, and this project follows semantic versioning vMAJOR.MINOR.
 
+## v1.7 - 2026-02-13
+### Executive summary
+- Se renombra el entrypoint de reporting de `src.reporting.export_artifacts` a `src.reporting.render_report`.
+- Se actualizan referencias de import y comandos CLI para mantener compatibilidad operativa tras el rename.
+- Se valida el pipeline en modo provincia y modo canton con ejecucion real end-to-end.
+
+### Refactor
+- `src/reporting/export_artifacts.py` -> `src/reporting/render_report.py`.
+- `src/reporting/export_artifacts.py.backup` -> `src/reporting/render_report.py.backup`.
+
+### Documentation
+- README actualizado para usar `python -m src.reporting.render_report`.
+
+### Notebooks
+- `notebooks/01_run_provincia.ipynb` y `notebooks/02_run_cantones.ipynb` actualizados a `src.reporting.render_report`.
+
+### Fixes
+- `src/utils/parallel.py` ahora importa `run_provincia` desde `src.reporting.render_report`.
+- Manifest de release generado por CLI ahora registra `python -m src.reporting.render_report`.
+
+### Verification
+- Corrida provincial validada: `BOLIVAR`.
+- Corrida cantonal validada: `BOLIVAR / GUARANDA`.
+
 ## v1.6 - 2026-02-12
 ### Executive summary
 - Se consolida el modo canton con salidas geograficas por parroquia en F02, F08 y F14.
